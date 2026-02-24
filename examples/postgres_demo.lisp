@@ -5,10 +5,10 @@
 ;   CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT, email TEXT);
 ;
 ; Verbindungs-String-Format:
-;   "host=localhost port=5432 user=postgres password=secret dbname=golisp_test sslmode=disable"
+;   "host=localhost port=5438 user=postgres password=secret dbname=golisp_test sslmode=disable"
 
 ; Verbindung herstellen
-(define conn (pg-connect "host=localhost port=5432 user=postgres password=secret dbname=golisp_test sslmode=disable"))
+(define conn (pg-connect "host=localhost port=5438 user=postgres password=secret dbname=golisp_test sslmode=disable"))
 (println "Connected to PostgreSQL")
 
 ; Tabelle erstellen (falls nicht vorhanden)

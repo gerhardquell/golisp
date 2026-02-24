@@ -13,6 +13,7 @@ package lib
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -219,8 +220,14 @@ func interfaceToCell(v interface{}) *Cell {
 	switch val := v.(type) {
 	case int64:
 		return MakeNum(float64(val))
+	case int32:
+		return MakeNum(float64(val))
+	case int:
+		return MakeNum(float64(val))
 	case float64:
 		return MakeNum(val)
+	case float32:
+		return MakeNum(float64(val))
 	case string:
 		return MakeStr(val)
 	case bool:
@@ -230,6 +237,8 @@ func interfaceToCell(v interface{}) *Cell {
 		return MakeNil()
 	case []byte:
 		return MakeStr(string(val))
+	case time.Time:
+		return MakeStr(val.Format(time.RFC3339))
 	default:
 		return MakeStr(fmt.Sprintf("%v", val))
 	}

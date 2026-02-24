@@ -67,6 +67,11 @@ func listStr(c *Cell) string {
   for c != nil && c.Type == LIST {
     s += c.Car.String()
     if c.Cdr != nil && c.Cdr.Type != NIL {
+      if c.Cdr.Type != LIST {
+        // Dotted pair: (a . b)
+        s += " . " + c.Cdr.String()
+        break
+      }
       s += " "
     }
     c = c.Cdr
