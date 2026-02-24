@@ -8,7 +8,10 @@
 
 package lib
 
-import "fmt"
+import (
+  "fmt"
+  "sync/atomic"
+)
 
 // BaseEnv erstellt die globale Umgebung mit allen eingebauten Funktionen
 func BaseEnv() *Env {
@@ -44,6 +47,9 @@ func BaseEnv() *Env {
 
   // apply
   env.Set("apply", makeFn(fnApply))
+
+  // gensym
+  env.Set("gensym", makeFn(fnGensym))
 
   // sigoREST
   RegisterSigo(env)
@@ -191,4 +197,12 @@ func fnApply(args []*Cell) (*Cell, error) {
 func fnRead(args []*Cell) (*Cell, error) {
   if len(args) < 1 { return nil, fmt.Errorf("read: 1 Argument nötig") }
   return Read(args[0].Val)
+}
+
+// gensym: global-atomarer Zähler für eindeutige Symbole
+var gensymCounter int64
+
+func fnGensym(args []*Cell) (*Cell, error) {
+  n := atomic.AddInt64(&gensymCounter, 1)
+  return MakeAtom(fmt.Sprintf("G__%d", n)), nil
 }

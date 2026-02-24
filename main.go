@@ -33,6 +33,8 @@ func main() {
     test(env, "(mapcar (lambda (x) (* x x)) (list 1 2 3 4 5))")
     test(env, "(parfunc r (* 6 7) (+ 100 23))")
     test(env, "r")
+    test(env, "(atom (gensym))")
+    test(env, "(= (gensym) (gensym))")
     return
   }
 
