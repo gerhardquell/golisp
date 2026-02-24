@@ -27,7 +27,8 @@ func main() {
 
   // Testmodus: go run . -t
   if len(os.Args) > 1 && os.Args[1] == "-t" {
-    fmt.Println("=== GoLisp Test ===\n")
+    fmt.Println("=== GoLisp Test ===")
+    fmt.Println()
     test(env, "(+ 1 2)")
     test(env, "(defun fak (n) (if (= n 0) 1 (* n (fak (- n 1)))))")
     test(env, "(fak 6)")
