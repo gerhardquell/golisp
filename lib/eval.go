@@ -206,15 +206,27 @@ func evalDefine(args *Cell, env *Env) (*Cell, error) {
   return MakeAtom(name), nil
 }
 
+// wrapBegin: mehrere Body-Ausdrücke → (begin expr1 expr2 ...)
+// Einzelner Ausdruck → direkt zurückgeben (kein unnötiger begin-Wrapper)
+func wrapBegin(exprs *Cell) *Cell {
+  if exprs == nil || exprs.Type != LIST {
+    return MakeNil()
+  }
+  if exprs.Cdr == nil || exprs.Cdr.Type != LIST {
+    return exprs.Car  // nur ein Ausdruck → direkt
+  }
+  return Cons(MakeAtom("begin"), exprs)  // mehrere → (begin ...)
+}
+
 func evalDefun(args *Cell, env *Env) (*Cell, error) {
   name := args.Car.Val
-  lam  := makeLambda(args.Cdr.Car, args.Cdr.Cdr.Car, env)
+  lam  := makeLambda(args.Cdr.Car, wrapBegin(args.Cdr.Cdr), env)
   env.Set(name, lam)
   return MakeAtom(name), nil
 }
 
 func evalLambda(args *Cell, env *Env) (*Cell, error) {
-  return makeLambda(args.Car, args.Cdr.Car, env), nil
+  return makeLambda(args.Car, wrapBegin(args.Cdr), env), nil
 }
 
 func makeLambda(params, body *Cell, env *Env) *Cell {
@@ -338,7 +350,7 @@ func cellToSlice(args *Cell) []*Cell {
 // Wie defun, aber speichert MACRO statt LIST
 func evalDefmacro(args *Cell, env *Env) (*Cell, error) {
   name := args.Car.Val
-  lam  := makeLambda(args.Cdr.Car, args.Cdr.Cdr.Car, env)
+  lam  := makeLambda(args.Cdr.Car, wrapBegin(args.Cdr.Cdr), env)
   lam.Type = MACRO   // ← einziger Unterschied zu defun!
   env.Set(name, lam)
   return MakeAtom(name), nil

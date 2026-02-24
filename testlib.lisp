@@ -27,3 +27,12 @@
 
 (println (safe-div 10 2))   ; 5  → kein Fehler
 (println (safe-div 10 0))   ; "Fehler: Division durch 0"
+
+; Multi-Body defun Demo
+(defun between? (x lo hi)
+  (define ok-lo (not (< x lo)))
+  (define ok-hi (not (> x hi)))
+  (and ok-lo ok-hi))
+
+(println (between? 5 1 10))   ; t
+(println (between? 15 1 10))  ; ()
