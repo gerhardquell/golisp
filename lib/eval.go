@@ -47,6 +47,7 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
       case "parfunc":      return evalParfunc(expr.Cdr, env)
       case "lock":         return evalLock(expr.Cdr, env)
       case "eval":         return evalEval(expr.Cdr, env)
+      case "catch":        return evalCatch(expr.Cdr, env)
       case "quasiquote":   return evalQuasiquote(expr.Cdr, env)
       case "unquote":      return nil, fmt.Errorf("unquote: außerhalb von quasiquote")
       case "unquote-splice": return nil, fmt.Errorf("unquote-splice: außerhalb von quasiquote")
@@ -488,4 +489,31 @@ func evalEval(args *Cell, env *Env) (*Cell, error) {
   if err != nil { return nil, err }
   // dann nochmal auswerten
   return Eval(expr, env)
+}
+
+// catch: (catch body-expr handler-expr)
+// Wertet body-expr aus. Bei LispError → handler mit Fehler-Cell aufrufen.
+// Echte Go-Fehler (interne Fehler) werden durchgereicht.
+func evalCatch(args *Cell, env *Env) (*Cell, error) {
+  if args == nil || args.Type != LIST ||
+    args.Cdr == nil || args.Cdr.Type != LIST {
+    return nil, fmt.Errorf("catch: Syntax: (catch body handler)")
+  }
+
+  // Body auswerten – eigener Eval-Aufruf damit Fehler abgefangen werden kann
+  result, err := Eval(args.Car, env)
+  if err == nil {
+    return result, nil  // kein Fehler → normal zurückgeben
+  }
+
+  // Nur LispError abfangen; Go-interne Fehler durchreichen
+  lispErr, ok := err.(*LispError)
+  if !ok {
+    return nil, err
+  }
+
+  // Handler auswerten und mit Fehler-Cell aufrufen
+  handler, err := Eval(args.Cdr.Car, env)
+  if err != nil { return nil, err }
+  return apply(handler, []*Cell{lispErr.Msg})
 }
