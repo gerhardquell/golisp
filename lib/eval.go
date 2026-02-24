@@ -152,6 +152,9 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
     }
 
     // Eingebaute Funktion
+    if fn.Type != FUNC {
+      return nil, fmt.Errorf("eval: '%s' ist keine Funktion", fn)
+    }
     return fn.Fn(args)
   }
 }
