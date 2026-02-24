@@ -19,13 +19,15 @@ golisp/
   lib/
     types.go           Cell-Datenstruktur (LispType, Cons, MakeAtom...)
     reader.go          Parser: String → Cell-Baum (NewReader, Read)
-    env.go             Umgebung: Get, Set, Update (verkettete Scopes)
+    env.go             Umgebung: Get, Set, Update, Symbols (verkettete Scopes)
     eval.go            Herzstück: Eval, Spezialformen, defmacro, parfunc
     primitives.go      Eingebaute Funktionen + BaseEnv()
+    stringfuncs.go     String-Primitiven (RegisterStringFuncs)
     goroutine.go       parfunc, chan-make/send/recv, lock-make
     fileio.go          file-write, file-append, file-read, file-exists?, file-delete
     sigorest.go        sigo, sigo-models, sigo-host (HTTP zu sigoREST)
-    readline.go        REPL-Input mit History + Multiline
+    readline.go        REPL: go-prompt, Syntax-Highlighting, History, Multiline
+    env_test.go        Go-Tests für Env.Symbols()
 ```
 
 ---
@@ -38,11 +40,12 @@ golisp/
 - **Kommentare:** sparsam, sprechende Namen bevorzugt
 - **Dateigröße:** max 300 Zeilen, ab 500 aufteilen
 - **Datei-Header:** immer mit Autor, CoAutor, Copyright, Erstellt (YYYYMMDD)
-- **Fehler:** `fmt.Errorf("funktionsname: beschreibung")` 
+- **Fehler:** `fmt.Errorf("funktionsname: beschreibung")`
 
 ### Spezialformen vs. Primitiven
 - Braucht die Funktion Zugriff auf `env`? → Spezialform in `eval.go`
 - Reine Berechnung ohne env? → Primitiv in `primitives.go`
+- Gruppe verwandter Primitiven → eigene Datei mit `RegisterXxx(env *Env)`
 - Neue Primitiven immer in `BaseEnv()` registrieren
 
 ---
@@ -66,10 +69,15 @@ type Cell struct {
 ```
 1. Spezialformen prüfen (quote, if, define, defun, lambda,
    let, begin, set!, defmacro, mapcar, load, and, or, not,
-   parfunc, lock, eval)
+   parfunc, lock, eval, catch, while, do, quasiquote, cond)
 2. Makro-Expansion (MACRO-Typ → expand → Eval des Ergebnisses)
 3. Normale Anwendung: Funktion auswerten → Argumente auswerten → apply
 ```
+
+### TCO – Trampolin in Eval()
+Lambda-Calls und alle Tail-Spezialformen (`if`, `begin`, `let`, `cond`)
+setzen `expr`/`env` und machen `continue` im `for {}`-Loop — kein neuer
+Stack-Frame, O(1) Stack für beliebig tiefe Tail-Rekursion.
 
 ### Lambda-Struktur
 ```go
@@ -78,6 +86,11 @@ Cell{Type: LIST, Car: params, Cdr: body, Env: closureEnv}
 // Makro: identisch aber Type: MACRO
 ```
 
+### Multi-Body: wrapBegin
+`defun`, `lambda`, `defmacro` akzeptieren mehrere Body-Ausdrücke.
+`wrapBegin(exprs)` wrappet sie zur Definitionszeit in `(begin ...)`.
+Einzelner Ausdruck → direkt, kein Overhead.
+
 ---
 
 ## Implementierte Features
@@ -85,39 +98,27 @@ Cell{Type: LIST, Car: params, Cdr: body, Env: closureEnv}
 ### Spezialformen
 `quote` `if` `define` `defun` `lambda` `let` `begin` `set!`
 `defmacro` `mapcar` `load` `and` `or` `not` `parfunc` `lock` `eval`
+`catch` `while` `do` `quasiquote` `cond`
 
 ### Eingebaute Funktionen
 **Arithmetik:** `+` `-` `*` `/`
-**Vergleiche:** `=` `<` `>`
-**Listen:** `car` `cdr` `cons` `atom` `null` `list`
+**Vergleiche:** `=` `<` `>` `>=` `<=`
+**Listen:** `car` `cdr` `cons` `atom` `null` `list` `apply` `equal?`
 **I/O:** `print` `println` `read`
+**String:** `string-length` `string-append` `substring`
+  `string-upcase` `string-downcase` `string->number` `number->string`
+**Fehler:** `error` `catch`
+**Makro-Hilfe:** `gensym`
 **Datei:** `file-write` `file-append` `file-read` `file-exists?` `file-delete`
 **Nebenläufigkeit:** `chan-make` `chan-send` `chan-recv` `lock-make`
 **KI:** `sigo` `sigo-models` `sigo-host`
 
----
-
-## Fehlende Features (Priorität für ClaudeCode)
-
-### Kritisch
-1. **Quasiquote** – `` ` `` `,` `,@` im Reader + Eval
-   → Makros werden lesbar statt `(list (quote ...) ...)`
-2. **Tail-Call-Optimierung (TCO)** – Trampolin-Muster in eval.go
-   → Tiefe Rekursion ohne Stack-Overflow
-3. **`apply`** – `(apply + (list 1 2 3))`
-4. **`cond`** – `(cond ((= x 1) ...) ((= x 2) ...) (t ...))`
-
-### Wichtig
-5. **String-Funktionen** – `string-length` `string-append` `substring`
-   `string->number` `number->string` `string-upcase` `string-downcase`
-6. **Error-Handling** – `(error "msg")` `catch`/`throw`
-7. **`gensym`** – eindeutige Symbole für Makros
-
-### Nice-to-have
-8. **`do`/`while`** – Schleifen
-9. **`equal?`** – struktureller Listen-Vergleich
-10. **History-Persistenz** in readline (`.golisp_history`)
-11. **Tab-Completion** in readline
+### REPL (readline.go)
+- **Syntax-Highlighting:** Klammern nach Tiefe eingefärbt (6 Farben, fett)
+  Strings grün · Kommentare grau · Quote-Zeichen gelb
+- **Multi-line:** Enter bei offenem Ausdruck → automatische Einrückung
+- **History:** persistent `~/.golisp_history` (500 Einträge)
+- **Library:** `github.com/elk-language/go-prompt`
 
 ---
 
@@ -154,19 +155,12 @@ und alle lokalen Ollama-Modelle (z.B. `ollama-gemma3-4b`)
 ## Build & Test
 
 ```bash
-go build .          # kompilieren
-go run . -t         # Testmodus
-go run .            # REPL starten
+go build .           # kompilieren
+go run . -t          # Testmodus (26 Tests)
+go run .             # REPL starten
 go run . skript.lisp # Datei ausführen
+go test ./...        # Go-Unit-Tests
 ```
-
-### readline (auf Gerhard's Debian-Rechner)
-```bash
-go get github.com/chzyer/readline
-go mod tidy
-```
-Dann `lib/readline.go` durch chzyer-Version ersetzen für
-vollständige Multiline-REPL mit Pfeiltasten-History.
 
 ---
 
