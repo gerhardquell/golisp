@@ -70,6 +70,9 @@ func BaseEnv() *Env {
   // String-Funktionen
   RegisterStringFuncs(env)
 
+  // PostgreSQL
+  RegisterPostgres(env)
+
   return env
 }
 
