@@ -54,6 +54,12 @@ func main() {
     test(env, `w`)
     // do: (do ((i 0 (+ i 1)) (s 0 (+ s i))) ((= i 5) s))  → 0+1+2+3+4 = 10
     test(env, `(do ((i 0 (+ i 1)) (s 0 (+ s i))) ((= i 5) s))`)
+    // TCO: tiefe Rekursion ohne Stack-Overflow
+    test(env, `(defun sum-acc (n acc) (if (= n 0) acc (sum-acc (- n 1) (+ acc n))))`)
+    test(env, `(sum-acc 1000000 0)`)
+    test(env, `(defun even? (n) (if (= n 0) t (odd?  (- n 1))))`)
+    test(env, `(defun odd?  (n) (if (= n 0) () (even? (- n 1))))`)
+    test(env, `(even? 1000000)`)
     return
   }
 
