@@ -81,5 +81,8 @@ type LispError struct {
 }
 
 func (e *LispError) Error() string {
-  return e.Msg.Val
+  if e.Msg.Type == STRING || e.Msg.Type == ATOM {
+    return e.Msg.Val
+  }
+  return e.Msg.String()
 }

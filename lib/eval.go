@@ -496,7 +496,8 @@ func evalEval(args *Cell, env *Env) (*Cell, error) {
 // Echte Go-Fehler (interne Fehler) werden durchgereicht.
 func evalCatch(args *Cell, env *Env) (*Cell, error) {
   if args == nil || args.Type != LIST ||
-    args.Cdr == nil || args.Cdr.Type != LIST {
+    args.Cdr == nil || args.Cdr.Type != LIST ||
+    args.Cdr.Car == nil {
     return nil, fmt.Errorf("catch: Syntax: (catch body handler)")
   }
 
