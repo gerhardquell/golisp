@@ -248,3 +248,81 @@ GoLisp als selbsterweiterndes KI-System.
 > "Eine Sprache die sich selbst erweitern kann,
 >  braucht zuerst eine Sprache die vollständig ist."
 > — Gerhard & Claude, Februar 2026
+
+---
+---
+
+# Session 3 – 2026-02-24
+
+**Autoren:** Gerhard Quell & Claude Sonnet 4.6
+
+---
+
+## Was haben wir gebaut?
+
+| Feature | Dateien | Commits |
+|---------|---------|---------|
+| `fnEq` redundanten Vergleich fixen | `primitives.go` | 1 |
+| `macroexpand` als Debugging-Hilfe | `eval.go` | 1 |
+
+**Gesamt:** 2 Quick Wins, 1 Commit, ~35 Zeilen geändert.
+
+**Vorher:** `fnEq` verglich unnötigerweise auch `Val`; keine Möglichkeit Makro-Expansion zu inspizieren.
+**Nachher:** `fnEq` vergleicht nur noch `Num`; `macroexpand` zeigt expandierte Makros.
+
+---
+
+## Was lief gut?
+
+### Plan → Execute ohne Review-Overhead
+Die drei Quick Wins waren klein und sicher genug für direkte Implementierung:
+- `fnEq`: offensichtlicher Bug, einfache Lösung
+- `macroexpand`: klare Spezifikation, saubere Architektur-Entscheidung
+
+Keine Subagenten nötig – der Aufwand wäre größer als der Nutzen.
+
+### Spezialform statt Primitive
+Die erste `macroexpand`-Implementierung als Primitive (`primitives.go`) scheiterte elegant:
+Primitives haben keinen `env`-Zugriff, können also Makros nicht auflösen.
+Die Umstellung auf Spezialform (`eval.go`) war der korrekte Architektur-Pfad.
+
+**Bestätigte Regel:** *Braucht Zugriff auf `env`? → Spezialform. Reine Berechnung? → Primitive.*
+
+---
+
+## Was lief nicht so gut?
+
+### Keine nennenswerten Probleme
+Alle drei Quick Wins funktionierten auf Anhieb:
+- Build erfolgreich
+- Alle 40 Tests grün
+- `macroexpand` expandiert `when` korrekt zu `if`
+
+---
+
+## Technische Erkenntnisse
+
+### `macroexpand` als Debugging-Werkzeug
+Die Fähigkeit Makros zu expandieren ist essentiell für Makro-Entwicklung:
+
+```lisp
+> (macroexpand '(when x y))
+(if x (begin y))
+```
+
+Dies zeigt ob ein Makro korrekt expandiert ohne es auszuführen.
+
+### Go-Idiom: Nicht mehr prüfen als nötig
+`fnEq` verglich vorher `Num && Val`. Da `=` nur für Zahlen gedacht ist,
+reicht der `Num`-Vergleich. Weniger Code, klarere Semantik.
+
+---
+
+## Fazit Session 3
+
+Kleine, gezielte Verbesserungen mit sofort sichtbarem Nutzen.
+Die Codebasis bleibt sauber, die Sprache wird benutzerfreundlicher.
+
+> "Quick Wins sind das Öl einer Codebasis –
+>  kleine Investition, große Wirkung auf Geschwindigkeit und Moral."
+> — Gerhard & Claude, Februar 2026
