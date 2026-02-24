@@ -9,6 +9,7 @@
 package main
 
 import (
+  "errors"
   "fmt"
   "os"
   "golisp/lib"
@@ -45,7 +46,13 @@ func main() {
     cell, err := lib.Read(`(load "` + os.Args[1] + `")`)
     if err != nil { fmt.Println("ERR:", err); os.Exit(1) }
     if _, err := lib.Eval(cell, env); err != nil {
-      fmt.Println("ERR:", err); os.Exit(1)
+      var le *lib.LispError
+      if errors.As(err, &le) {
+        fmt.Println("ERR:", le.Msg)
+      } else {
+        fmt.Println("ERR:", err)
+      }
+      os.Exit(1)
     }
     return
   }

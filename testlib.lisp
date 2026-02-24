@@ -19,3 +19,11 @@
 (swap! x y)
 (println x)   ; soll 20 ausgeben
 (println y)   ; soll 10 ausgeben
+
+; Error-Handling Demo
+(defun safe-div (a b)
+  (catch (if (= b 0) (error "Division durch 0") (/ a b))
+         (lambda (e) (string-append "Fehler: " e))))
+
+(println (safe-div 10 2))   ; "5"  → kein Fehler
+(println (safe-div 10 0))   ; "Fehler: Division durch 0"
