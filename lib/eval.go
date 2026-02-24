@@ -36,6 +36,7 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
 
       // ── Nicht-Tail: Ergebnis sofort zurückgeben ──
       case "quote":        return expr.Cdr.Car, nil
+      case "macroexpand":  return evalMacroexpand(expr.Cdr, env)
       case "define":       return evalDefine(expr.Cdr, env)
       case "defun":        return evalDefun(expr.Cdr, env)
       case "defmacro":     return evalDefmacro(expr.Cdr, env)
@@ -268,6 +269,32 @@ func evalDefine(args *Cell, env *Env) (*Cell, error) {
   if err != nil { return nil, err }
   env.Set(name, val)
   return MakeAtom(name), nil
+}
+
+// macroexpand: (macroexpand form) → expandiert Makros einmal, gibt Ergebnis zurück
+func evalMacroexpand(args *Cell, env *Env) (*Cell, error) {
+  if args == nil || args.Type != LIST || args.Car == nil {
+    return nil, fmt.Errorf("macroexpand: 1 Argument nötig")
+  }
+  form, err := Eval(args.Car, env)
+  if err != nil { return nil, err }
+
+  // Wenn es keine Liste ist, geben wir sie unverändert zurück
+  if form == nil || form.Type != LIST || form.Car == nil {
+    return form, nil
+  }
+
+  // Prüfe ob das erste Element ein Makro ist
+  fn, err := Eval(form.Car, env)
+  if err != nil { return nil, err }
+
+  // Wenn es ein Makro ist, expandieren wir es
+  if fn.Type == MACRO {
+    return applyLambda(fn, cellToSlice(form.Cdr))
+  }
+
+  // Kein Makro → Form unverändert zurückgeben
+  return form, nil
 }
 
 // wrapBegin: mehrere Body-Ausdrücke → (begin expr1 expr2 ...)
@@ -599,6 +626,11 @@ type blockReturn struct {
 }
 
 func (b *blockReturn) Error() string { return "return-from: " + b.name }
+
+// IsMacro prüft ob eine Cell ein Makro ist (exportiert für macroexpand)
+func IsMacro(c *Cell) bool {
+  return c != nil && c.Type == MACRO
+}
 
 // bindArgs: Lambda-Parameter binden – unterstützt regulär, dotted-rest,
 // &optional, &key, &rest (CL-Stil Lambda-Listen)

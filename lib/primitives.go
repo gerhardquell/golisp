@@ -108,7 +108,7 @@ func fnDiv(args []*Cell) (*Cell, error) {
 
 func fnEq(args []*Cell) (*Cell, error) {
   if len(args) < 2 { return nil, fmt.Errorf("=: 2 Argumente nötig") }
-  if args[0].Num == args[1].Num && args[0].Val == args[1].Val {
+  if args[0].Num == args[1].Num {
     return MakeAtom("t"), nil
   }
   return MakeNil(), nil
