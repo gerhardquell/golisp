@@ -48,6 +48,8 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
       case "lock":         return evalLock(expr.Cdr, env)
       case "eval":         return evalEval(expr.Cdr, env)
       case "catch":        return evalCatch(expr.Cdr, env)
+      case "while":        return evalWhile(expr.Cdr, env)
+      case "do":           return evalDo(expr.Cdr, env)
       case "quasiquote":   return evalQuasiquote(expr.Cdr, env)
       case "unquote":      return nil, fmt.Errorf("unquote: außerhalb von quasiquote")
       case "unquote-splice": return nil, fmt.Errorf("unquote-splice: außerhalb von quasiquote")
@@ -196,6 +198,75 @@ func applyLambda(lambda *Cell, args []*Cell) (*Cell, error) {
     i++
   }
   return Eval(body, localEnv)
+}
+
+// while: (while test body...)
+// Wertet body aus solange test wahr ist, gibt nil zurück.
+func evalWhile(args *Cell, env *Env) (*Cell, error) {
+  if args == nil || args.Type != LIST {
+    return nil, fmt.Errorf("while: Syntax: (while test body...)")
+  }
+  test := args.Car
+  body := wrapBegin(args.Cdr)
+  for {
+    cond, err := Eval(test, env)
+    if err != nil { return nil, err }
+    if !isTruthy(cond) { return MakeNil(), nil }
+    if _, err := Eval(body, env); err != nil { return nil, err }
+  }
+}
+
+// do: (do ((var init step) ...) (test result) body...)
+// Scheme-style: bindet Variablen, iteriert bis test wahr, gibt result zurück.
+func evalDo(args *Cell, env *Env) (*Cell, error) {
+  if args == nil || args.Type != LIST {
+    return nil, fmt.Errorf("do: Syntax: (do ((var init step) ...) (test result) body...)")
+  }
+  // Variablen-Bindungen initialisieren
+  localEnv := NewEnv(env)
+  bindings := args.Car
+  for b := bindings; b != nil && b.Type == LIST; b = b.Cdr {
+    spec := b.Car                         // (var init step)
+    name := spec.Car.Val
+    init, err := Eval(spec.Cdr.Car, env)  // init im äußeren env auswerten
+    if err != nil { return nil, err }
+    localEnv.Set(name, init)
+  }
+  // Abbruchbedingung: (test result...)
+  termClause := args.Cdr.Car
+  test   := termClause.Car
+  result := wrapBegin(termClause.Cdr)
+  // Optionaler Body
+  body := wrapBegin(args.Cdr.Cdr)
+  for {
+    // Abbruchtest
+    cond, err := Eval(test, localEnv)
+    if err != nil { return nil, err }
+    if isTruthy(cond) { return Eval(result, localEnv) }
+    // Body auswerten
+    if _, err := Eval(body, localEnv); err != nil { return nil, err }
+    // Alle Step-Ausdrücke gleichzeitig auswerten (im alten env!)
+    var names []string
+    var vals  []*Cell
+    for b := bindings; b != nil && b.Type == LIST; b = b.Cdr {
+      spec := b.Car
+      name := spec.Car.Val
+      step := spec.Cdr.Cdr  // Cdr.Cdr = step-Teil
+      var newVal *Cell
+      if step != nil && step.Type == LIST {
+        newVal, err = Eval(step.Car, localEnv)
+        if err != nil { return nil, err }
+      } else {
+        newVal, err = localEnv.Get(name)
+        if err != nil { return nil, err }
+      }
+      names = append(names, name)
+      vals  = append(vals, newVal)
+    }
+    for i, name := range names {
+      localEnv.Set(name, vals[i])
+    }
+  }
 }
 
 func evalDefine(args *Cell, env *Env) (*Cell, error) {

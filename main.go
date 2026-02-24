@@ -48,6 +48,12 @@ func main() {
     test(env, `(<= 2 3)`)
     test(env, `(<= 3 3)`)
     test(env, `(<= 5 3)`)
+    // while
+    test(env, `(define w 0)`)
+    test(env, `(while (< w 3) (set! w (+ w 1)))`)
+    test(env, `w`)
+    // do: (do ((i 0 (+ i 1)) (s 0 (+ s i))) ((= i 5) s))  → 0+1+2+3+4 = 10
+    test(env, `(do ((i 0 (+ i 1)) (s 0 (+ s i))) ((= i 5) s))`)
     return
   }
 
