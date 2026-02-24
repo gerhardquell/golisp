@@ -80,9 +80,14 @@ func lispLexer(line string) []prompt.Token {
         c, s := utf8.DecodeRuneInString(line[i:])
         i += s
         if c == '"' { break }
-        if c == '\\' { i += s }  // skip escaped char
+        if c == '\\' && i < len(line) {
+          _, nextSize := utf8.DecodeRuneInString(line[i:])
+          i += nextSize  // skip escaped char
+        }
       }
-      emit(start, i-1, prompt.SimpleTokenWithColor(prompt.Green))
+      end := i - 1
+      if end >= len(line) { end = len(line) - 1 }
+      emit(start, end, prompt.SimpleTokenWithColor(prompt.Green))
 
     case ';':
       // Kommentar bis Zeilenende: dunkelgrau
