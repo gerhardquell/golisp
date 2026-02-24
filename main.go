@@ -42,6 +42,12 @@ func main() {
     test(env, `(defun add-and-show (x y) (define s (+ x y)) s)`)
     test(env, `(add-and-show 3 4)`)
     test(env, `((lambda (x) (define d (* x 2)) d) 5)`)
+    test(env, `(>= 5 3)`)
+    test(env, `(>= 3 3)`)
+    test(env, `(>= 2 3)`)
+    test(env, `(<= 2 3)`)
+    test(env, `(<= 3 3)`)
+    test(env, `(<= 5 3)`)
     return
   }
 

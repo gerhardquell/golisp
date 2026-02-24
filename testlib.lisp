@@ -30,8 +30,8 @@
 
 ; Multi-Body defun Demo
 (defun between? (x lo hi)
-  (define ok-lo (not (< x lo)))
-  (define ok-hi (not (> x hi)))
+  (define ok-lo (>= x lo))
+  (define ok-hi (<= x hi))
   (and ok-lo ok-hi))
 
 (println (between? 5 1 10))   ; t

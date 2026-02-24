@@ -27,6 +27,8 @@ func BaseEnv() *Env {
   env.Set("=",   makeFn(fnEq))
   env.Set("<",   makeFn(fnLt))
   env.Set(">",   makeFn(fnGt))
+  env.Set(">=",  makeFn(fnGe))
+  env.Set("<=",  makeFn(fnLe))
 
   // Listen-Primitiven (die klassischen 7!)
   env.Set("car",  makeFn(fnCar))
@@ -119,6 +121,18 @@ func fnLt(args []*Cell) (*Cell, error) {
 func fnGt(args []*Cell) (*Cell, error) {
   if len(args) < 2 { return nil, fmt.Errorf(">: 2 Argumente nötig") }
   if args[0].Num > args[1].Num { return MakeAtom("t"), nil }
+  return MakeNil(), nil
+}
+
+func fnGe(args []*Cell) (*Cell, error) {
+  if len(args) < 2 { return nil, fmt.Errorf(">=: 2 Argumente nötig") }
+  if args[0].Num >= args[1].Num { return MakeAtom("t"), nil }
+  return MakeNil(), nil
+}
+
+func fnLe(args []*Cell) (*Cell, error) {
+  if len(args) < 2 { return nil, fmt.Errorf("<=: 2 Argumente nötig") }
+  if args[0].Num <= args[1].Num { return MakeAtom("t"), nil }
   return MakeNil(), nil
 }
 
