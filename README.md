@@ -55,6 +55,11 @@ GoLisp is a modern Lisp interpreter built in Go, featuring **tail-call optimizat
 - **Self-extending**: LLMs write code, GoLisp executes it
 - **Ensemble calls**: Query multiple AIs in parallel
 
+### Database (PostgreSQL)
+- **Native PostgreSQL**: Direct database connectivity via `lib/pq`
+- **Parameterized queries**: Safe SQL with `$1`, `$2` placeholders
+- **Results as association lists**: Access columns by name
+
 ### Developer Experience
 - **Syntax-highlighted REPL**: Rainbow parentheses, persistent history
 - **Multi-line input**: Automatic indentation for incomplete expressions
@@ -185,6 +190,28 @@ results  ; => (42 123 13)
 (fib 20)  ; => 6765
 ```
 
+### PostgreSQL Database
+
+```lisp
+; Connect to PostgreSQL
+(define conn (pg-connect "host=localhost port=5432 user=postgres dbname=mydb sslmode=disable"))
+
+; Query with parameters
+(define users (pg-query conn "SELECT * FROM users WHERE id = $1" 42))
+; => (((id . 42) (name . "Alice") (email . "alice@example.com")))
+
+; Access result
+(define user (car users))
+(cdr (assoc "name" user))  ; => "Alice"
+
+; Execute INSERT/UPDATE/DELETE
+(define affected (pg-exec conn "INSERT INTO users (name) VALUES ($1)" "Bob"))
+; => 1
+
+; Close connection
+(pg-close conn)
+```
+
 ### Error Handling
 
 ```lisp
@@ -236,6 +263,7 @@ results  ; => (42 123 13)
 | **Files** | `file-write`, `file-append`, `file-read`, `file-exists?`, `file-delete` |
 | **Concurrency** | `chan-make`, `chan-send`, `chan-recv`, `lock-make` |
 | **AI** | `sigo`, `sigo-models`, `sigo-host` |
+| **PostgreSQL** | `pg-connect`, `pg-query`, `pg-exec`, `pg-close` |
 | **Meta** | `gensym`, `macroexpand`, `error` |
 
 ---
