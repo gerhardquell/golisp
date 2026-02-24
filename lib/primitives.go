@@ -29,6 +29,7 @@ func BaseEnv() *Env {
   env.Set(">",   makeFn(fnGt))
   env.Set(">=",  makeFn(fnGe))
   env.Set("<=",  makeFn(fnLe))
+  env.Set("equal?", makeFn(fnEqual))
 
   // Listen-Primitiven (die klassischen 7!)
   env.Set("car",  makeFn(fnCar))
@@ -134,6 +135,27 @@ func fnLe(args []*Cell) (*Cell, error) {
   if len(args) < 2 { return nil, fmt.Errorf("<=: 2 Argumente nötig") }
   if args[0].Num <= args[1].Num { return MakeAtom("t"), nil }
   return MakeNil(), nil
+}
+
+func fnEqual(args []*Cell) (*Cell, error) {
+  if len(args) < 2 { return nil, fmt.Errorf("equal?: 2 Argumente nötig") }
+  if cellEqual(args[0], args[1]) { return MakeAtom("t"), nil }
+  return MakeNil(), nil
+}
+
+// cellEqual: struktureller Vergleich zweier Cells (rekursiv)
+func cellEqual(a, b *Cell) bool {
+  if a == nil && b == nil { return true }
+  if a == nil || b == nil { return false }
+  if a.Type != b.Type     { return false }
+  switch a.Type {
+  case NIL:    return true
+  case NUMBER: return a.Num == b.Num
+  case ATOM:   return a.Val == b.Val
+  case STRING: return a.Val == b.Val
+  case LIST:   return cellEqual(a.Car, b.Car) && cellEqual(a.Cdr, b.Cdr)
+  }
+  return false
 }
 
 // ---- Listen ----

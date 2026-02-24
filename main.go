@@ -60,6 +60,14 @@ func main() {
     test(env, `(defun even? (n) (if (= n 0) t (odd?  (- n 1))))`)
     test(env, `(defun odd?  (n) (if (= n 0) () (even? (- n 1))))`)
     test(env, `(even? 1000000)`)
+    // equal?
+    test(env, `(equal? 1 1)`)
+    test(env, `(equal? 1 2)`)
+    test(env, `(equal? "a" "a")`)
+    test(env, `(equal? (list 1 2) (list 1 2))`)
+    test(env, `(equal? (list 1 2) (list 1 3))`)
+    test(env, `(equal? (list 1 (list 2 3)) (list 1 (list 2 3)))`)
+    test(env, `(equal? () ())`)
     return
   }
 
