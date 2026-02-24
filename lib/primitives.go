@@ -203,6 +203,9 @@ func fnRead(args []*Cell) (*Cell, error) {
 var gensymCounter int64
 
 func fnGensym(args []*Cell) (*Cell, error) {
+  if len(args) != 0 {
+    return nil, fmt.Errorf("gensym: keine Argumente erwartet")
+  }
   n := atomic.AddInt64(&gensymCounter, 1)
   return MakeAtom(fmt.Sprintf("G__%d", n)), nil
 }
