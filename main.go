@@ -35,6 +35,8 @@ func main() {
     test(env, "r")
     test(env, "(atom (gensym))")
     test(env, "(= (gensym) (gensym))")
+    test(env, `(catch (error "oops") (lambda (e) (string-append "caught: " e)))`)
+    test(env, `(catch (+ 1 2) (lambda (e) "fehler"))`)
     return
   }
 

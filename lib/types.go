@@ -73,3 +73,13 @@ func listStr(c *Cell) string {
   }
   return s + ")"
 }
+
+// LispError: Lisp-Laufzeitfehler, von (error msg) ausgelöst
+// Unterscheidet sich von internen Go-Fehlern (fmt.Errorf)
+type LispError struct {
+  Msg *Cell
+}
+
+func (e *LispError) Error() string {
+  return e.Msg.Val
+}

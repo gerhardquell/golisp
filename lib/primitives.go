@@ -51,6 +51,9 @@ func BaseEnv() *Env {
   // gensym
   env.Set("gensym", makeFn(fnGensym))
 
+  // error
+  env.Set("error", makeFn(fnError))
+
   // sigoREST
   RegisterSigo(env)
 
@@ -208,4 +211,12 @@ func fnGensym(args []*Cell) (*Cell, error) {
   }
   n := atomic.AddInt64(&gensymCounter, 1)
   return MakeAtom(fmt.Sprintf("G__%d", n)), nil
+}
+
+// error: (error msg) → signalisiert Lisp-Laufzeitfehler
+func fnError(args []*Cell) (*Cell, error) {
+  if len(args) != 1 {
+    return nil, fmt.Errorf("error: 1 Argument nötig")
+  }
+  return nil, &LispError{Msg: args[0]}
 }
