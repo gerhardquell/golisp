@@ -149,6 +149,9 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
         p = p.Cdr
         i++
       }
+      if p != nil && p.Type == ATOM {   // Rest-Parameter
+        localEnv.Set(p.Val, sliceToCell(args[i:]))
+      }
       expr = fn.Cdr   // body
       env = localEnv
       continue
@@ -196,6 +199,9 @@ func applyLambda(lambda *Cell, args []*Cell) (*Cell, error) {
     localEnv.Set(p.Car.Val, args[i])
     p = p.Cdr
     i++
+  }
+  if p != nil && p.Type == ATOM {   // Rest-Parameter: (lambda (a . rest) ...)
+    localEnv.Set(p.Val, sliceToCell(args[i:]))
   }
   return Eval(body, localEnv)
 }
@@ -408,6 +414,31 @@ func evalNot(args *Cell, env *Env) (*Cell, error) {
 }
 
 // cellToSlice wandelt eine Lisp-Liste in einen Go-Slice um (ohne Eval!)
+// sliceToCell: []*Cell → Lisp-Liste
+func sliceToCell(args []*Cell) *Cell {
+  result := MakeNil()
+  for i := len(args) - 1; i >= 0; i-- {
+    result = Cons(args[i], result)
+  }
+  return result
+}
+
+// LoadString: Mehrere Ausdrücke aus einem String auswerten
+func LoadString(src string, env *Env) (*Cell, error) {
+  src = strings.TrimSpace(src)
+  var result *Cell
+  r := NewReader(src)
+  for {
+    r.skipWS()
+    if r.pos >= len(r.src) { break }
+    expr, err := r.readExpr()
+    if err != nil { return nil, fmt.Errorf("stdlib: %w", err) }
+    result, err = Eval(expr, env)
+    if err != nil { return nil, fmt.Errorf("stdlib: %w", err) }
+  }
+  return result, nil
+}
+
 func cellToSlice(args *Cell) []*Cell {
   var result []*Cell
   for args != nil && args.Type == LIST {
