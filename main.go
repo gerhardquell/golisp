@@ -38,6 +38,9 @@ func main() {
     test(env, "(= (gensym) (gensym))")
     test(env, `(catch (error "oops") (lambda (e) (string-append "caught: " e)))`)
     test(env, `(catch (+ 1 2) (lambda (e) "fehler"))`)
+    test(env, `(defun add-and-show (x y) (define s (+ x y)) s)`)
+    test(env, `(add-and-show 3 4)`)
+    test(env, `((lambda (x) (define d (* x 2)) d) 5)`)
     return
   }
 
