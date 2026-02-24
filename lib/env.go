@@ -32,6 +32,21 @@ func (e *Env) Set(name string, val *Cell) {
   e.vars[name] = val
 }
 
+// Symbols sammelt alle bekannten Namen (inkl. äußere Scopes, ohne Duplikate)
+func (e *Env) Symbols() []string {
+  seen := make(map[string]bool)
+  var result []string
+  for cur := e; cur != nil; cur = cur.parent {
+    for name := range cur.vars {
+      if !seen[name] {
+        seen[name] = true
+        result = append(result, name)
+      }
+    }
+  }
+  return result
+}
+
 // Update ändert einen bestehenden Wert (für set!)
 func (e *Env) Update(name string, val *Cell) error {
   if _, ok := e.vars[name]; ok {

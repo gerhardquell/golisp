@@ -17,6 +17,8 @@ package lib
 import (
   "fmt"
   "io"
+  "os"
+  "sort"
   "strings"
 
   "github.com/chzyer/readline"
@@ -27,10 +29,37 @@ type Readline struct {
   history []string
 }
 
-func NewReadline(prompt string) *Readline {
+// dynCompleter baut bei jedem TAB-Druck frisch aus getSymbols()
+type dynCompleter struct{ getSymbols func() []string }
+
+func (d *dynCompleter) Do(line []rune, pos int) ([][]rune, int) {
+  syms := d.getSymbols()
+  sort.Strings(syms)
+  // aktuelles Wort bis zur Cursor-Position
+  word := string(line[:pos])
+  // letztes Token (nach letzter öffnender Klammer oder Leerzeichen)
+  for i := len(word) - 1; i >= 0; i-- {
+    if word[i] == '(' || word[i] == ' ' {
+      word = word[i+1:]
+      break
+    }
+  }
+  var candidates [][]rune
+  for _, s := range syms {
+    if strings.HasPrefix(s, word) {
+      candidates = append(candidates, []rune(s[len(word):]))
+    }
+  }
+  return candidates, len([]rune(word))
+}
+
+func NewReadline(prompt string, getSymbols func() []string) *Readline {
+  histFile := os.ExpandEnv("$HOME/.golisp_history")
   rl, err := readline.NewEx(&readline.Config{
     Prompt:          prompt,
-    HistoryLimit:    200,
+    HistoryLimit:    500,
+    HistoryFile:     histFile,
+    AutoComplete:    &dynCompleter{getSymbols},
     InterruptPrompt: "^C",
     EOFPrompt:       "exit",
   })

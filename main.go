@@ -70,7 +70,7 @@ func main() {
   // REPL
   fmt.Println("GoLisp 0.2  –  Ctrl+D oder (exit) zum Beenden")
   fmt.Println("Multiline: offene Klammern → Fortsetzung mit ..")
-  rl := lib.NewReadline("golisp> ")
+  rl := lib.NewReadline("golisp> ", env.Symbols)
   defer rl.Close()
 
   for {
