@@ -25,5 +25,5 @@
   (catch (if (= b 0) (error "Division durch 0") (/ a b))
          (lambda (e) (string-append "Fehler: " e))))
 
-(println (safe-div 10 2))   ; "5"  → kein Fehler
+(println (safe-div 10 2))   ; 5  → kein Fehler
 (println (safe-div 10 0))   ; "Fehler: Division durch 0"

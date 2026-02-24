@@ -284,10 +284,10 @@ func evalLoad(args *Cell, env *Env) (*Cell, error) {
     if r.pos >= len(r.src) { break }
 
     expr, err := r.readExpr()
-    if err != nil { return nil, fmt.Errorf("load %s: %v", filename.Val, err) }
+    if err != nil { return nil, fmt.Errorf("load %s: %w", filename.Val, err) }
 
     result, err = Eval(expr, env)
-    if err != nil { return nil, fmt.Errorf("load %s: %v", filename.Val, err) }
+    if err != nil { return nil, fmt.Errorf("load %s: %w", filename.Val, err) }
   }
   return result, nil
 }

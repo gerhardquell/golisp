@@ -72,7 +72,15 @@ func main() {
     cell, err := lib.Read(line)
     if err != nil { fmt.Println("ERR read:", err); continue }
     result, err := lib.Eval(cell, env)
-    if err != nil { fmt.Println("ERR eval:", err); continue }
+    if err != nil {
+      var le *lib.LispError
+      if errors.As(err, &le) {
+        fmt.Println("ERR:", le.Msg)
+      } else {
+        fmt.Println("ERR:", err)
+      }
+      continue
+    }
     fmt.Println("=>", result)
   }
   fmt.Println("Tschüss!")
