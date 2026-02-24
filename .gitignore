@@ -1,0 +1,10 @@
+# Go binary
+golisp
+
+# Build artifacts
+*.test
+*.out
+
+# Go workspace
+go.work
+go.work.sum
