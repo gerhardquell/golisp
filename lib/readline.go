@@ -19,7 +19,6 @@ import (
   "bufio"
   "fmt"
   "os"
-  "sort"
   "strings"
   "unicode/utf8"
 
@@ -27,14 +26,14 @@ import (
   pstrings "github.com/elk-language/go-prompt/strings"
 )
 
-// depthColors: Klammern pro Tiefe eine andere Farbe (zyklisch)
+// depthColors: Klammern pro Tiefe — helle, kontrastreiche Farben (zyklisch)
 var depthColors = []prompt.Color{
-  prompt.Yellow,
-  prompt.Cyan,
+  prompt.Red,
   prompt.Green,
+  prompt.Yellow,
   prompt.Fuchsia,
   prompt.Turquoise,
-  prompt.Brown,
+  prompt.White,
 }
 
 // lispLexer tokenisiert eine Zeile für das Syntax-Highlighting
@@ -196,23 +195,6 @@ func NewReadline(promptStr string, getSymbols func() []string) *Readline {
     return 0, true  // ausführen
   }
 
-  // Completer: dynamisch aus Env-Symbolen
-  completer := func(d prompt.Document) ([]prompt.Suggest, pstrings.RuneNumber, pstrings.RuneNumber) {
-    word := d.GetWordBeforeCursor()
-    end  := d.CurrentRuneIndex()
-    start := end - pstrings.RuneNumber(len([]rune(word)))
-
-    syms := getSymbols()
-    sort.Strings(syms)
-    var suggs []prompt.Suggest
-    for _, s := range syms {
-      if strings.HasPrefix(s, word) {
-        suggs = append(suggs, prompt.Suggest{Text: s})
-      }
-    }
-    return suggs, start, end
-  }
-
   histPath := os.ExpandEnv("$HOME/.golisp_history")
   hist := newFileHistory(histPath)
 
@@ -220,11 +202,9 @@ func NewReadline(promptStr string, getSymbols func() []string) *Readline {
     executor,
     prompt.WithPrefix(promptStr),
     prompt.WithLexer(prompt.NewEagerLexer(lispLexer)),
-    prompt.WithCompleter(completer),
     prompt.WithExecuteOnEnterCallback(executeOnEnter),
     prompt.WithCustomHistory(hist),
     prompt.WithIndentSize(2),
-    prompt.WithMaxSuggestion(10),
   )
 
   go func() {
