@@ -5,110 +5,151 @@
 //  Copyright: 2026 Gerhard Quell - SKEQuell
 //  Erstellt : 20260224
 //**********************************************************************
-// Readline mit github.com/chzyer/readline:
-//   - History (Pfeiltasten)
-//   - Multiline: offene Klammern → Fortsetzung mit ..
-//   - Ctrl+C: Eingabe abbrechen
-//   - Ctrl+D: Beenden
+// Readline mit github.com/elk-language/go-prompt:
+//   - Syntax-Highlighting: Klammern nach Tiefe eingefärbt
+//   - TAB-Completion: alle Env-Symbole dynamisch
+//   - History: persistent in ~/.golisp_history
+//   - Multiline: offene Klammern → automatische Einrückung
+//   - Ctrl+C: Eingabe abbrechen, Ctrl+D: Beenden
 //**********************************************************************
 
 package lib
 
 import (
+  "bufio"
   "fmt"
-  "io"
   "os"
   "sort"
   "strings"
+  "unicode/utf8"
 
-  "github.com/chzyer/readline"
+  prompt "github.com/elk-language/go-prompt"
+  pstrings "github.com/elk-language/go-prompt/strings"
 )
 
-type Readline struct {
-  rl      *readline.Instance
-  history []string
+// depthColors: Klammern pro Tiefe eine andere Farbe (zyklisch)
+var depthColors = []prompt.Color{
+  prompt.Yellow,
+  prompt.Cyan,
+  prompt.Green,
+  prompt.Fuchsia,
+  prompt.Turquoise,
+  prompt.Brown,
 }
 
-// dynCompleter baut bei jedem TAB-Druck frisch aus getSymbols()
-type dynCompleter struct{ getSymbols func() []string }
-
-func (d *dynCompleter) Do(line []rune, pos int) ([][]rune, int) {
-  syms := d.getSymbols()
-  sort.Strings(syms)
-  // aktuelles Wort bis zur Cursor-Position
-  word := string(line[:pos])
-  // letztes Token (nach letzter öffnender Klammer oder Leerzeichen)
-  for i := len(word) - 1; i >= 0; i-- {
-    if word[i] == '(' || word[i] == ' ' {
-      word = word[i+1:]
-      break
-    }
+// lispLexer tokenisiert eine Zeile für das Syntax-Highlighting
+func lispLexer(line string) []prompt.Token {
+  if len(line) == 0 {
+    return nil
   }
-  var candidates [][]rune
-  for _, s := range syms {
-    if strings.HasPrefix(s, word) {
-      candidates = append(candidates, []rune(s[len(word):]))
-    }
+  var tokens []prompt.Token
+  depth := 0
+  inStr := false
+  escape := false
+  i := 0
+
+  emit := func(first, last int, opts ...prompt.SimpleTokenOption) {
+    if first > last { return }
+    tokens = append(tokens, prompt.NewSimpleToken(
+      pstrings.ByteNumber(first),
+      pstrings.ByteNumber(last),
+      opts...,
+    ))
   }
-  return candidates, len([]rune(word))
-}
 
-func NewReadline(prompt string, getSymbols func() []string) *Readline {
-  histFile := os.ExpandEnv("$HOME/.golisp_history")
-  rl, err := readline.NewEx(&readline.Config{
-    Prompt:          prompt,
-    HistoryLimit:    500,
-    HistoryFile:     histFile,
-    AutoComplete:    &dynCompleter{getSymbols},
-    InterruptPrompt: "^C",
-    EOFPrompt:       "exit",
-  })
-  if err != nil {
-    // Fallback falls Terminal nicht unterstützt wird
-    fmt.Println("WARN: readline nicht verfügbar, einfacher Modus")
-    return &Readline{}
-  }
-  return &Readline{rl: rl}
-}
+  for i < len(line) {
+    ch, size := utf8.DecodeRuneInString(line[i:])
 
-// Read liest einen vollständigen Lisp-Ausdruck – auch über mehrere Zeilen
-func (r *Readline) Read() (string, error) {
-  if r.rl == nil { return r.readSimple() }
-
-  var lines []string
-  prompt := r.rl.Config.Prompt
-
-  for {
-    r.rl.SetPrompt(prompt)
-    line, err := r.rl.Readline()
-    if err == readline.ErrInterrupt {
-      // Ctrl+C → aktuelle Eingabe verwerfen
-      lines = nil
-      prompt = r.rl.Config.Prompt
-      fmt.Println()
+    if escape {
+      escape = false
+      i += size
       continue
     }
-    if err == io.EOF { return "", fmt.Errorf("EOF") }
-    if err != nil   { return "", err }
-
-    lines = append(lines, line)
-    combined := strings.Join(lines, " ")
-
-    // Klammern zählen: ist der Ausdruck vollständig?
-    depth := countDepth(combined)
-    if depth == 0 && strings.TrimSpace(combined) != "" {
-      return strings.TrimSpace(combined), nil
-    }
-    if depth < 0 {
-      // Zu viele schließende Klammern
-      fmt.Println("ERR: unerwartete ')'")
-      lines = nil
-      prompt = r.rl.Config.Prompt
+    if inStr {
+      if ch == '\\' { escape = true }
+      if ch == '"'  { inStr = false }
+      i += size
       continue
     }
-    // Ausdruck noch offen → Fortsetzung
-    prompt = fmt.Sprintf("..%s", strings.Repeat("  ", depth))
+
+    switch ch {
+    case '"':
+      // String: grün
+      start := i
+      i += size
+      for i < len(line) {
+        c, s := utf8.DecodeRuneInString(line[i:])
+        i += s
+        if c == '"' { break }
+        if c == '\\' { i += s }  // skip escaped char
+      }
+      emit(start, i-1, prompt.SimpleTokenWithColor(prompt.Green))
+
+    case ';':
+      // Kommentar bis Zeilenende: dunkelgrau
+      emit(i, len(line)-1, prompt.SimpleTokenWithColor(prompt.DarkGray))
+      i = len(line)
+
+    case '(':
+      col := depthColors[depth%len(depthColors)]
+      emit(i, i, prompt.SimpleTokenWithColor(col),
+        prompt.SimpleTokenWithDisplayAttributes(prompt.DisplayBold))
+      depth++
+      i += size
+
+    case ')':
+      if depth > 0 { depth-- }
+      col := depthColors[depth%len(depthColors)]
+      emit(i, i, prompt.SimpleTokenWithColor(col),
+        prompt.SimpleTokenWithDisplayAttributes(prompt.DisplayBold))
+      i += size
+
+    case '\'', '`', ',':
+      // Quote-Zeichen: gelb
+      emit(i, i, prompt.SimpleTokenWithColor(prompt.Yellow))
+      i += size
+
+    default:
+      i += size
+    }
   }
+  return tokens
+}
+
+// fileHistory implementiert HistoryInterface mit Datei-Persistenz
+type fileHistory struct {
+  *prompt.History
+  path string
+}
+
+func newFileHistory(path string) *fileHistory {
+  h := &fileHistory{History: prompt.NewHistory(), path: path}
+  // bestehende History einlesen
+  f, err := os.Open(path)
+  if err != nil { return h }
+  defer f.Close()
+  var entries []string
+  sc := bufio.NewScanner(f)
+  for sc.Scan() {
+    if line := sc.Text(); line != "" {
+      entries = append(entries, line)
+    }
+  }
+  h.History.DeleteAll()
+  for _, e := range entries {
+    h.History.Add(e)
+  }
+  h.History.Clear()
+  return h
+}
+
+func (h *fileHistory) Add(input string) {
+  h.History.Add(input)
+  // ans Ende der Datei anhängen
+  f, err := os.OpenFile(h.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+  if err != nil { return }
+  defer f.Close()
+  fmt.Fprintln(f, input)
 }
 
 // countDepth zählt offene Klammern (ignoriert Strings und Kommentare)
@@ -116,28 +157,92 @@ func countDepth(s string) int {
   depth  := 0
   inStr  := false
   escape := false
-
   for _, ch := range s {
     if escape  { escape = false; continue }
     if ch == '\\' && inStr { escape = true; continue }
     if ch == '"' { inStr = !inStr; continue }
-    if inStr    { continue }
-    if ch == ';' { break }  // Kommentar bis Zeilenende
+    if inStr     { continue }
+    if ch == ';' { break }
     if ch == '(' { depth++ }
     if ch == ')' { depth-- }
   }
   return depth
 }
 
-// readSimple: Fallback ohne readline
-func (r *Readline) readSimple() (string, error) {
-  fmt.Print("golisp> ")
-  var line string
-  _, err := fmt.Scanln(&line)
-  return line, err
+// --- Readline -------------------------------------------------------
+
+type Readline struct {
+  ch chan string
 }
 
-// Close gibt readline-Ressourcen frei
-func (r *Readline) Close() {
-  if r.rl != nil { r.rl.Close() }
+func NewReadline(promptStr string, getSymbols func() []string) *Readline {
+  r := &Readline{ch: make(chan string, 1)}
+
+  // Executor: aufgerufen wenn ein vollständiger Ausdruck bestätigt wird
+  executor := func(line string) {
+    line = strings.TrimSpace(line)
+    if line != "" {
+      r.ch <- line
+    }
+  }
+
+  // ExecuteOnEnterCallback: Multi-line – Enter nur ausführen wenn Klammern ausgeglichen
+  executeOnEnter := func(p *prompt.Prompt, indentSize int) (int, bool) {
+    text := p.Buffer().Text()
+    depth := countDepth(text)
+    if depth > 0 {
+      return depth, false  // weiter eingeben, einrücken
+    }
+    return 0, true  // ausführen
+  }
+
+  // Completer: dynamisch aus Env-Symbolen
+  completer := func(d prompt.Document) ([]prompt.Suggest, pstrings.RuneNumber, pstrings.RuneNumber) {
+    word := d.GetWordBeforeCursor()
+    end  := d.CurrentRuneIndex()
+    start := end - pstrings.RuneNumber(len([]rune(word)))
+
+    syms := getSymbols()
+    sort.Strings(syms)
+    var suggs []prompt.Suggest
+    for _, s := range syms {
+      if strings.HasPrefix(s, word) {
+        suggs = append(suggs, prompt.Suggest{Text: s})
+      }
+    }
+    return suggs, start, end
+  }
+
+  histPath := os.ExpandEnv("$HOME/.golisp_history")
+  hist := newFileHistory(histPath)
+
+  p := prompt.New(
+    executor,
+    prompt.WithPrefix(promptStr),
+    prompt.WithLexer(prompt.NewEagerLexer(lispLexer)),
+    prompt.WithCompleter(completer),
+    prompt.WithExecuteOnEnterCallback(executeOnEnter),
+    prompt.WithCustomHistory(hist),
+    prompt.WithIndentSize(2),
+    prompt.WithMaxSuggestion(10),
+  )
+
+  go func() {
+    p.Run()
+    close(r.ch)
+  }()
+
+  return r
 }
+
+// Read blockiert bis ein vollständiger Ausdruck verfügbar ist
+func (r *Readline) Read() (string, error) {
+  expr, ok := <-r.ch
+  if !ok {
+    return "", fmt.Errorf("EOF")
+  }
+  return expr, nil
+}
+
+// Close — kein-op, go-prompt beendet sich via Ctrl+D selbst
+func (r *Readline) Close() {}
