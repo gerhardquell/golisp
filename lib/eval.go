@@ -57,8 +57,8 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
         if err != nil { return nil, err }
         if isTruthy(cond) {
           expr = expr.Cdr.Cdr.Car
-        } else if expr.Cdr.Cdr != nil && expr.Cdr.Cdr.Type == LIST {
-          expr = expr.Cdr.Cdr.Car
+        } else if expr.Cdr.Cdr != nil && expr.Cdr.Cdr.Cdr != nil && expr.Cdr.Cdr.Cdr.Type == LIST {
+          expr = expr.Cdr.Cdr.Cdr.Car
         } else {
           return MakeNil(), nil
         }
