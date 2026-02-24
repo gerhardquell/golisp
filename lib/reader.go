@@ -71,6 +71,7 @@ func (r *Reader) readExpr() (*Cell, error) {
   case ch == '`':  return r.readQuasiquote()
   case ch == ',':  return r.readUnquote()
   case ch == '"':  return r.readString()
+  case ch == '#':  return r.readDispatch()
   default:         return r.readAtomOrNum()
   }
 }
@@ -172,6 +173,20 @@ func (r *Reader) readString() (*Cell, error) {
     sb.WriteRune(ch)
   }
   return MakeStr(sb.String()), nil
+}
+
+// readDispatch: #' → (function expr)
+func (r *Reader) readDispatch() (*Cell, error) {
+  r.next() // '#'
+  ch, ok := r.peek()
+  if !ok { return nil, fmt.Errorf("reader: EOF nach #") }
+  if ch == '\'' {
+    r.next()
+    expr, err := r.readExpr()
+    if err != nil { return nil, err }
+    return Cons(MakeAtom("function"), Cons(expr, MakeNil())), nil
+  }
+  return nil, fmt.Errorf("reader: unbekanntes Dispatch-Zeichen #%c", ch)
 }
 
 // readAtomOrNum: Symbol oder Zahl

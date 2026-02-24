@@ -21,7 +21,9 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
 
     switch expr.Type {
     case NIL, NUMBER, STRING, FUNC: return expr, nil
-    case ATOM:  return env.Get(expr.Val)
+    case ATOM:
+      if len(expr.Val) > 0 && expr.Val[0] == ':' { return expr, nil } // Keywords selbst-auswertend
+      return env.Get(expr.Val)
     case LIST:  // handled below
     default:    return nil, fmt.Errorf("eval: unbekannter Typ")
     }
@@ -51,6 +53,11 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
       case "while":        return evalWhile(expr.Cdr, env)
       case "do":           return evalDo(expr.Cdr, env)
       case "quasiquote":   return evalQuasiquote(expr.Cdr, env)
+      case "function":     return Eval(expr.Cdr.Car, env)
+      case "flet":         return evalFlet(expr.Cdr, env)
+      case "labels":       return evalLabels(expr.Cdr, env)
+      case "block":        return evalBlock(expr.Cdr, env)
+      case "return-from":  return evalReturnFrom(expr.Cdr, env)
       case "unquote":      return nil, fmt.Errorf("unquote: außerhalb von quasiquote")
       case "unquote-splice": return nil, fmt.Errorf("unquote-splice: außerhalb von quasiquote")
 
@@ -140,17 +147,9 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
     // Lambda → Argumente binden, Loop weiter (TCO)
     if fn.Type == LIST {
       closureEnv := fn.Env.(*Env)
-      params := fn.Car
       localEnv := NewEnv(closureEnv)
-      p, i := params, 0
-      for p != nil && p.Type == LIST {
-        if i >= len(args) { return nil, fmt.Errorf("lambda: zu wenig Argumente") }
-        localEnv.Set(p.Car.Val, args[i])
-        p = p.Cdr
-        i++
-      }
-      if p != nil && p.Type == ATOM {   // Rest-Parameter
-        localEnv.Set(p.Val, sliceToCell(args[i:]))
+      if err := bindArgs(fn.Car, args, closureEnv, localEnv); err != nil {
+        return nil, err
       }
       expr = fn.Cdr   // body
       env = localEnv
@@ -187,23 +186,11 @@ func apply(fn *Cell, args []*Cell) (*Cell, error) {
 // Lambda-Struktur: Cell{Type:LIST, Car:params, Cdr:body, Env:closureEnv}
 func applyLambda(lambda *Cell, args []*Cell) (*Cell, error) {
   closureEnv := lambda.Env.(*Env)
-  params     := lambda.Car
-  body       := lambda.Cdr
   localEnv   := NewEnv(closureEnv)
-
-  p, i := params, 0
-  for p != nil && p.Type == LIST {
-    if i >= len(args) {
-      return nil, fmt.Errorf("lambda: zu wenig Argumente")
-    }
-    localEnv.Set(p.Car.Val, args[i])
-    p = p.Cdr
-    i++
+  if err := bindArgs(lambda.Car, args, closureEnv, localEnv); err != nil {
+    return nil, err
   }
-  if p != nil && p.Type == ATOM {   // Rest-Parameter: (lambda (a . rest) ...)
-    localEnv.Set(p.Val, sliceToCell(args[i:]))
-  }
-  return Eval(body, localEnv)
+  return Eval(lambda.Cdr, localEnv)
 }
 
 // while: (while test body...)
@@ -603,6 +590,167 @@ func evalEval(args *Cell, env *Env) (*Cell, error) {
   if err != nil { return nil, err }
   // dann nochmal auswerten
   return Eval(expr, env)
+}
+
+// blockReturn: Sentinel-Fehler für (return-from name value)
+type blockReturn struct {
+  name  string
+  value *Cell
+}
+
+func (b *blockReturn) Error() string { return "return-from: " + b.name }
+
+// bindArgs: Lambda-Parameter binden – unterstützt regulär, dotted-rest,
+// &optional, &key, &rest (CL-Stil Lambda-Listen)
+func bindArgs(params *Cell, args []*Cell, closureEnv *Env, localEnv *Env) error {
+  section := 0  // 0=regulär, 1=&optional, 2=&key
+  argIdx  := 0
+
+  for p := params; p != nil; {
+    if p.Type == NIL { break }
+    if p.Type == ATOM {
+      // Dotted rest-Parameter: (lambda (a b . rest) ...)
+      localEnv.Set(p.Val, sliceToCell(args[argIdx:]))
+      return nil
+    }
+    if p.Type != LIST { break }
+
+    param := p.Car
+    p = p.Cdr
+
+    if param.Type == ATOM {
+      switch param.Val {
+      case "&optional": section = 1; continue
+      case "&key":      section = 2; continue
+      case "&rest":
+        if p == nil || p.Type != LIST || p.Car == nil {
+          return fmt.Errorf("lambda: &rest braucht Parameter-Namen")
+        }
+        localEnv.Set(p.Car.Val, sliceToCell(args[argIdx:]))
+        return nil
+      }
+    }
+
+    switch section {
+    case 0:  // reguläre Parameter
+      if param.Type != ATOM {
+        return fmt.Errorf("lambda: Parameter muss Atom sein")
+      }
+      if argIdx >= len(args) {
+        return fmt.Errorf("lambda: zu wenig Argumente (brauche '%s')", param.Val)
+      }
+      localEnv.Set(param.Val, args[argIdx])
+      argIdx++
+
+    case 1:  // &optional
+      var name string
+      var def  *Cell
+      if param.Type == LIST {
+        name = param.Car.Val
+        if param.Cdr != nil && param.Cdr.Type == LIST { def = param.Cdr.Car }
+      } else {
+        name = param.Val
+      }
+      if argIdx < len(args) {
+        localEnv.Set(name, args[argIdx]); argIdx++
+      } else if def != nil {
+        val, err := Eval(def, closureEnv)
+        if err != nil { return err }
+        localEnv.Set(name, val)
+      } else {
+        localEnv.Set(name, MakeNil())
+      }
+
+    case 2:  // &key
+      var name string
+      var def  *Cell
+      if param.Type == LIST {
+        name = param.Car.Val
+        if param.Cdr != nil && param.Cdr.Type == LIST { def = param.Cdr.Car }
+      } else {
+        name = param.Val
+      }
+      keyword := ":" + name
+      found := false
+      for ki := argIdx; ki < len(args); ki++ {
+        if args[ki].Type == ATOM && args[ki].Val == keyword && ki+1 < len(args) {
+          localEnv.Set(name, args[ki+1]); found = true; break
+        }
+      }
+      if !found {
+        if def != nil {
+          val, err := Eval(def, closureEnv)
+          if err != nil { return err }
+          localEnv.Set(name, val)
+        } else {
+          localEnv.Set(name, MakeNil())
+        }
+      }
+    }
+  }
+  return nil
+}
+
+// flet: (flet ((name (params) body...) ...) body...)
+// Lokale Funktionen schließen über die äußere Umgebung (keine Gegenseitigkeit).
+func evalFlet(args *Cell, env *Env) (*Cell, error) {
+  if args == nil || args.Type != LIST {
+    return nil, fmt.Errorf("flet: Syntax: (flet ((name params body...) ...) body...)")
+  }
+  localEnv := NewEnv(env)
+  for defs := args.Car; defs != nil && defs.Type == LIST; defs = defs.Cdr {
+    def  := defs.Car
+    name := def.Car.Val
+    lam  := makeLambda(def.Cdr.Car, wrapBegin(def.Cdr.Cdr), env)
+    localEnv.Set(name, lam)
+  }
+  return Eval(wrapBegin(args.Cdr), localEnv)
+}
+
+// labels: wie flet, aber Funktionen sehen die gemeinsame Umgebung (Rekursion).
+func evalLabels(args *Cell, env *Env) (*Cell, error) {
+  if args == nil || args.Type != LIST {
+    return nil, fmt.Errorf("labels: Syntax: (labels ((name params body...) ...) body...)")
+  }
+  localEnv := NewEnv(env)
+  for defs := args.Car; defs != nil && defs.Type == LIST; defs = defs.Cdr {
+    def  := defs.Car
+    name := def.Car.Val
+    lam  := makeLambda(def.Cdr.Car, wrapBegin(def.Cdr.Cdr), localEnv)
+    localEnv.Set(name, lam)
+  }
+  return Eval(wrapBegin(args.Cdr), localEnv)
+}
+
+// block: (block name body...) → benannter Block; return-from verlässt ihn.
+func evalBlock(args *Cell, env *Env) (*Cell, error) {
+  if args == nil || args.Type != LIST {
+    return nil, fmt.Errorf("block: Syntax: (block name body...)")
+  }
+  name := args.Car.Val
+  result, err := Eval(wrapBegin(args.Cdr), env)
+  if err != nil {
+    if br, ok := err.(*blockReturn); ok && br.name == name {
+      return br.value, nil
+    }
+    return nil, err
+  }
+  return result, nil
+}
+
+// return-from: (return-from name [value]) → nicht-lokaler Ausstieg aus block.
+func evalReturnFrom(args *Cell, env *Env) (*Cell, error) {
+  if args == nil || args.Type != LIST {
+    return nil, fmt.Errorf("return-from: Syntax: (return-from name [value])")
+  }
+  name := args.Car.Val
+  val  := MakeNil()
+  if args.Cdr != nil && args.Cdr.Type == LIST {
+    var err error
+    val, err = Eval(args.Cdr.Car, env)
+    if err != nil { return nil, err }
+  }
+  return nil, &blockReturn{name: name, value: val}
 }
 
 // catch: (catch body-expr handler-expr)

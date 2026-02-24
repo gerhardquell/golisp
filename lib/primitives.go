@@ -48,8 +48,9 @@ func BaseEnv() *Env {
   env.Set("t",   MakeAtom("t"))
   env.Set("nil", MakeNil())
 
-  // apply
-  env.Set("apply", makeFn(fnApply))
+  // apply, funcall
+  env.Set("apply",   makeFn(fnApply))
+  env.Set("funcall", makeFn(fnFuncall))
 
   // gensym
   env.Set("gensym", makeFn(fnGensym))
@@ -230,6 +231,14 @@ func fnApply(args []*Cell) (*Cell, error) {
     combined = append(combined, lst.Car)
   }
   return apply(fn, combined)
+}
+
+// funcall: (funcall fn arg1 arg2 ...) → fn auf Argumente anwenden
+func fnFuncall(args []*Cell) (*Cell, error) {
+  if len(args) < 1 {
+    return nil, fmt.Errorf("funcall: mindestens 1 Argument nötig")
+  }
+  return apply(args[0], args[1:])
 }
 
 // read: (read "string") → parst String zu Cell
