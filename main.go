@@ -304,7 +304,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, "ERR:", err)
 			os.Exit(1)
 		}
-		if _, err := lib.Eval(cell, env); err != nil {
+		result, err := lib.Eval(cell, env)
+		if err != nil {
 			var le *lib.LispError
 			if errors.As(err, &le) {
 				fmt.Fprintln(os.Stderr, "ERR:", le.Msg)
@@ -313,6 +314,7 @@ func main() {
 			}
 			os.Exit(1)
 		}
+		fmt.Println(result)
 		os.Exit(0)
 	}
 
