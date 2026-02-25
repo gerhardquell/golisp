@@ -8,3 +8,4 @@ golisp
 # Go workspace
 go.work
 go.work.sum
+.worktrees/
