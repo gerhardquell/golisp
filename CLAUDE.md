@@ -15,7 +15,7 @@ als eingebaute Lisp-Primitiven beherrscht.
 
 ```
 golisp/
-  main.go              REPL + Testmodus (-t) + Datei-Loader
+  main.go              Unix-Style CLI: stdin/-i/-e/-t/Datei + Exit-Codes
   lib/
     types.go           Cell-Datenstruktur (LispType, Cons, MakeAtom...)
     reader.go          Parser: String → Cell-Baum (NewReader, Read)
@@ -113,12 +113,47 @@ Einzelner Ausdruck → direkt, kein Overhead.
 **Nebenläufigkeit:** `chan-make` `chan-send` `chan-recv` `lock-make`
 **KI:** `sigo` `sigo-models` `sigo-host`
 
-### REPL (readline.go)
+### REPL (readline.go) – `golisp -i`
+- **Start:** `./golisp -i` (benötigt TTY – im Script/CI kommt Fehlermeldung)
 - **Syntax-Highlighting:** Klammern nach Tiefe eingefärbt (6 Farben, fett)
   Strings grün · Kommentare grau · Quote-Zeichen gelb
 - **Multi-line:** Enter bei offenem Ausdruck → automatische Einrückung
 - **History:** persistent `~/.golisp_history` (500 Einträge)
 - **Library:** `github.com/elk-language/go-prompt`
+
+---
+
+## Unix-Style CLI
+
+GoLisp verhält sich wie ein typisches Unix-Tool:
+
+| Flag | Beschreibung | Beispiel |
+|------|--------------|----------|
+| *(default)* | Liest von stdin, gibt nur Ergebnis aus | `echo "(+ 1 2)" \| ./golisp` |
+| `-i` | Interaktiver REPL mit go-prompt | `./golisp -i` |
+| `-e EXPR` | Expression direkt ausführen | `./golisp -e "(* 6 7)"` |
+| `-t` | Tests ausführen | `./golisp -t` |
+| `DATEI` | Lisp-Datei laden | `./golisp script.lisp` |
+
+### Exit-Codes
+- **0** – Erfolg
+- **1** – Fehler (Parser, Eval, unbekanntes Symbol, etc.)
+
+### Multiline-Support (stdin)
+Expression wird erst ausgewertet wenn Klammern ausgeglichen sind:
+```bash
+cat <<'EOF' | ./golisp
+(defun square (x)
+  (* x x))
+(square 5)
+EOF
+# → 25
+```
+
+### Fehlerbehandlung
+- Alle Fehler gehen zu `stderr`
+- Ergebnisse gehen zu `stdout`
+- Bei Fehler in Pipe/Datei: weitere Expressions werden verarbeitet, Exit-Code 1
 
 ---
 
@@ -155,11 +190,19 @@ und alle lokalen Ollama-Modelle (z.B. `ollama-gemma3-4b`)
 ## Build & Test
 
 ```bash
-go build .           # kompilieren
-go run . -t          # Testmodus (26 Tests)
-go run .             # REPL starten
-go run . skript.lisp # Datei ausführen
-go test ./...        # Go-Unit-Tests
+go build .                              # kompilieren
+go test ./...                           # Go-Unit-Tests
+
+# CLI-Modi
+go run . -t                             # Testmodus (26 Tests)
+go run . -i                             # Interaktiver REPL (benötigt TTY)
+go run . -e "(+ 1 2)"                   # Expression direkt ausführen
+go run . skript.lisp                    # Datei ausführen
+echo "(+ 1 2)" | go run .              # Stdin-Modus (Default)
+
+# Exit-Codes: 0 = Erfolg, 1 = Fehler
+echo "(+ 1 2)" | ./golisp; echo $?      # → 0
+./golisp -e "(error 'x')"; echo $?      # → 1
 ```
 
 ---
