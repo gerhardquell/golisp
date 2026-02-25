@@ -61,7 +61,8 @@ GoLisp is a modern Lisp interpreter built in Go, featuring **tail-call optimizat
 - **Results as association lists**: Access columns by name
 
 ### Developer Experience
-- **Syntax-highlighted REPL**: Rainbow parentheses, persistent history
+- **Unix-style CLI**: Pipe-friendly stdin mode, consistent exit codes
+- **Syntax-highlighted REPL**: Rainbow parentheses, persistent history (`-i` flag)
 - **Multi-line input**: Automatic indentation for incomplete expressions
 - **Full UTF-8 support**: Unicode strings throughout
 
@@ -77,10 +78,42 @@ cd golisp
 go build .
 ```
 
+### CLI Usage
+
+GoLisp works like a standard Unix tool with multiple modes:
+
+| Mode | Command | Description |
+|------|---------|-------------|
+| **Stdin (default)** | `echo "(+ 1 2)" \| ./golisp` | Read from stdin, output result only |
+| **Interactive** | `./golisp -i` | REPL with syntax highlighting |
+| **Expression** | `./golisp -e "(+ 1 2)"` | Execute single expression |
+| **Script** | `./golisp script.lisp` | Run a Lisp file |
+| **Tests** | `./golisp -t` | Run built-in test suite |
+
+**Exit codes:** `0` = success, `1` = error
+
+```bash
+# Pipe mode (great for shell scripts)
+echo "(factorial 10)" | ./golisp
+# => 3628800
+
+# Direct expression
+./golisp -e "(* 6 7)"
+# => 42
+
+# Multiline via stdin
+cat <<'EOF' | ./golisp
+(defun square (x)
+  (* x x))
+(square 5)
+EOF
+# => 25
+```
+
 ### REPL
 
 ```bash
-./golisp
+./golisp -i
 ```
 
 ```lisp
@@ -272,7 +305,7 @@ results  ; => (42 123 13)
 
 ```
 ┌─────────────────────────────────────────┐
-│              REPL / Scripts             │
+│  CLI (stdin/flag/file) → REPL / Scripts │
 ├─────────────────────────────────────────┤
 │  Reader → Eval → Primitives → sigoREST  │
 │     ↓       ↓        ↓                  │
