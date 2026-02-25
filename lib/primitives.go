@@ -10,6 +10,7 @@ package lib
 
 import (
   "fmt"
+  "runtime"
   "sync/atomic"
 )
 
@@ -30,6 +31,7 @@ func BaseEnv() *Env {
   env.Set(">=",  makeFn(fnGe))
   env.Set("<=",  makeFn(fnLe))
   env.Set("equal?", makeFn(fnEqual))
+  env.Set("eq", makeFn(fnEqPtr))
 
   // Listen-Primitiven (die klassischen 7!)
   env.Set("car",  makeFn(fnCar))
@@ -57,6 +59,9 @@ func BaseEnv() *Env {
 
   // error
   env.Set("error", makeFn(fnError))
+
+  // Memory-Profiling
+  env.Set("memstats", makeFn(fnMemstats))
 
   // sigoREST
   RegisterSigo(env)
@@ -144,6 +149,17 @@ func fnLe(args []*Cell) (*Cell, error) {
 func fnEqual(args []*Cell) (*Cell, error) {
   if len(args) < 2 { return nil, fmt.Errorf("equal?: 2 Argumente nötig") }
   if cellEqual(args[0], args[1]) { return MakeAtom("t"), nil }
+  return MakeNil(), nil
+}
+
+// eq: Pointer-Gleichheit (identisches Objekt im Speicher)
+func fnEqPtr(args []*Cell) (*Cell, error) {
+  if len(args) < 2 {
+    return nil, fmt.Errorf("eq: 2 Argumente nötig")
+  }
+  if args[0] == args[1] {
+    return MakeAtom("t"), nil
+  }
   return MakeNil(), nil
 }
 
@@ -267,4 +283,33 @@ func fnError(args []*Cell) (*Cell, error) {
     return nil, fmt.Errorf("error: 1 Argument nötig")
   }
   return nil, &LispError{Msg: args[0]}
+}
+
+// memstats: (memstats) → Go Runtime Memory-Statistiken
+func fnMemstats(args []*Cell) (*Cell, error) {
+  if len(args) != 0 {
+    return nil, fmt.Errorf("memstats: keine Argumente erwartet")
+  }
+  var m runtime.MemStats
+  runtime.ReadMemStats(&m)
+
+  // Erstelle Property-Liste: ((heapalloc . 123) (heapsys . 456) ...)
+  stats := []struct {
+    name string
+    val  float64
+  }{
+    {"heapalloc", float64(m.HeapAlloc)},
+    {"heapsys", float64(m.HeapSys)},
+    {"heapobjects", float64(m.HeapObjects)},
+    {"numgc", float64(m.NumGC)},
+    {"pausetotalns", float64(m.PauseTotalNs)},
+    {"totalalloc", float64(m.TotalAlloc)},
+  }
+
+  result := MakeNil()
+  for i := len(stats) - 1; i >= 0; i-- {
+    pair := Cons(MakeAtom(stats[i].name), MakeNum(stats[i].val))
+    result = Cons(pair, result)
+  }
+  return result, nil
 }

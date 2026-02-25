@@ -102,8 +102,8 @@ Einzelner Ausdruck → direkt, kein Overhead.
 
 ### Eingebaute Funktionen
 **Arithmetik:** `+` `-` `*` `/`
-**Vergleiche:** `=` `<` `>` `>=` `<=`
-**Listen:** `car` `cdr` `cons` `atom` `null` `list` `apply` `equal?`
+**Vergleiche:** `=` `<` `>` `>=` `<=` `eq` `equal?`
+**Listen:** `car` `cdr` `cons` `atom` `null` `list` `apply`
 **I/O:** `print` `println` `read`
 **String:** `string-length` `string-append` `substring`
   `string-upcase` `string-downcase` `string->number` `number->string`
@@ -184,6 +184,58 @@ und alle lokalen Ollama-Modelle (z.B. `ollama-gemma3-4b`)
 **Wichtig für sigo-Prompts:** Den Prompt so formulieren dass die KI
 *nur* den Lisp-Code zurückgibt ohne Erklärungen – z.B.:
 `"Schreibe nur den Lisp-Code, keine Erklärungen: defun fib ..."`
+
+---
+
+## Memory Management
+
+GoLisp vertraut vollständig auf Go's Garbage Collector – es gibt kein
+manuelles Memory-Management. Das bedeutet:
+
+### Wie es funktioniert
+
+- **Cell-Allokation:** Jedes `&Cell{}` landet auf Go's Heap
+- **Kein Object-Pooling:** Keine `sync.Pool` oder ähnliche Optimierungen
+- **Zirkuläre Referenzen:** Go's GC erkennt Zyklen (Lambdas, `labels`)
+- **Singleton Nil:** `MakeNil()` gibt immer dieselbe Instanz zurück
+
+### Memory-Statistiken
+
+Die Funktion `(memstats)` gibt aktuelle Go-Runtime-Stats zurück:
+
+```lisp
+(memstats)
+;; => ((heapalloc . 421376)       ; aktueller Heap in Bytes
+;;     (heapsys . 7864320)        ; vom OS reservierter Heap
+;;     (heapobjects . 1247)       ; Anzahl allozierter Objekte
+;;     (numgc . 5)                ; Anzahl GC-Zyklen
+;;     (pausetotalns . 234567)    ; totale GC-Pause in Nanosekunden
+;;     (totalalloc . 1234567))    ; kumulative Allokation
+```
+
+### Best Practices
+
+1. **Keine Angst vor Allokationen:** Go's GC ist für kurzlebige Objekte optimiert
+2. **Externe Ressourcen schließen:** PostgreSQL-Verbindungen mit `pg-close` freigeben
+3. **Globales Environment:** Wächst permanent – keine `undefine` Funktion
+4. **Monitoring:** Bei Langzeit-Prozessen `(memstats)` regelmäßig loggen
+
+### Singleton-Nil Optimierung
+
+Vor der Optimierung: Jedes `()`, `nil`, leere Liste erzeugte eine neue Cell.
+Nach der Optimierung: Alle verwenden dieselbe `nilCell` Instanz.
+
+```lisp
+(eq (list) (list))  ; => t (identische Pointer)
+(eq nil nil)        ; => t (immer dieselbe Instanz)
+(eq '() '())        ; => t (auch quote-nil ist identisch)
+```
+
+**Hinweis:** `eq` prüft Pointer-Gleichheit (identisches Objekt im Speicher),
+während `equal?` strukturelle Gleichheit prüft (gleicher Inhalt).
+
+**Thread-Sicherheit:** Die Singleton-Nil ist sicher für `parfunc` –
+sie wird nur gelesen, nie modifiziert.
 
 ---
 

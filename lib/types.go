@@ -36,11 +36,14 @@ type Cell struct {
   Env  interface{} // *Env – interface{} um Zirkelimport zu vermeiden
 }
 
+// Singleton nil cell - vermeidet Allokationen für jedes ()
+var nilCell = &Cell{Type: NIL}
+
 // Hilfskonstruktoren
 func MakeAtom(name string) *Cell   { return &Cell{Type: ATOM, Val: name} }
 func MakeNum(n float64) *Cell      { return &Cell{Type: NUMBER, Num: n} }
 func MakeStr(s string) *Cell       { return &Cell{Type: STRING, Val: s} }
-func MakeNil() *Cell               { return &Cell{Type: NIL} }
+func MakeNil() *Cell               { return nilCell }
 func Cons(car, cdr *Cell) *Cell    { return &Cell{Type: LIST, Car: car, Cdr: cdr} }
 
 // String-Darstellung für Print
