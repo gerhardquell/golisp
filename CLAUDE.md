@@ -184,6 +184,33 @@ Für sequenzielle Calls mit Pausen:
 (sigo "Zweite Frage" "gemini-p")
 ```
 
+### Multi-Server Verteilung (mammouth/moonshot/zai)
+
+`sigo` unterstützt einen optionalen 4. Parameter für den Host:
+```lisp
+; Syntax: (sigo "prompt" "model" "session-id" "host")
+(sigo "Hallo" "claude-h" "" "http://mammouth:9080")
+(sigo "Hallo" "gemini-p" "" "http://moonshot:9080")
+(sigo "Hallo" "gpt41" "" "http://zai:9080")
+```
+
+**Anwendung: 6-Hüte-Modell mit Lastverteilung**
+```lisp
+(define mammouth "http://mammouth:9080")
+(define moonshot "http://moonshot:9080")
+(define zai      "http://zai:9080")
+
+(parfunc sechs-huete
+  (sigo "Fakten..." "claude-h" "" mammouth)   ; ⚪ Weiß
+  (sigo "Gefühl..." "gemini-p" "" moonshot)  ; 🔴 Rot
+  (sigo "Risiken..." "gpt41" "" zai)         ; ⚫ Schwarz
+  (sigo "Chancen..." "claude-h" "" mammouth) ; 🟡 Gelb
+  (sigo "Ideen..." "gemini-p" "" moonshot)   ; 🟢 Grün
+  (sigo "Meta..." "gpt41" "" zai))           ; 🔵 Blau
+```
+
+Ohne Host-Parameter wird der Default-Host (`sigo-host`) verwendet.
+
 ### Das selbsterweiternde Muster
 ```lisp
 ; KI schreibt Code → GoLisp führt ihn aus
