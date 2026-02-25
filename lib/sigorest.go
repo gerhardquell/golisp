@@ -39,15 +39,18 @@ func RegisterSigo(env *Env) {
 // fnSigo: (sigo "prompt")
 //         (sigo "prompt" "model")
 //         (sigo "prompt" "model" "session-id")
+//         (sigo "prompt" "model" "session-id" "host")
 func fnSigo(args []*Cell) (*Cell, error) {
   if len(args) < 1 { return nil, fmt.Errorf("sigo: mindestens 1 Argument") }
 
   prompt    := args[0].Val
   model     := "ollama-gemma3-4b"
   sessionID := ""
+  host      := sigoHost
 
   if len(args) >= 2 { model = args[1].Val }
   if len(args) >= 3 { sessionID = args[2].Val }
+  if len(args) >= 4 { host = strings.TrimRight(args[3].Val, "/") }
 
   // Rate-Limiting: Warte auf Token im Ticker
   <-sigoRateLimiter
@@ -61,7 +64,7 @@ func fnSigo(args []*Cell) (*Cell, error) {
   sigoLastCall = time.Now()
   sigoCallMutex.Unlock()
 
-  result, err := sigoCall(prompt, model, sessionID)
+  result, err := sigoCallToHost(prompt, model, sessionID, host)
   if err != nil { return nil, err }
   return MakeStr(result), nil
 }
@@ -97,6 +100,11 @@ func fnSigoHost(args []*Cell) (*Cell, error) {
 
 // sigoCall sendet einen Chat-Request an sigoREST
 func sigoCall(prompt, model, sessionID string) (string, error) {
+  return sigoCallToHost(prompt, model, sessionID, sigoHost)
+}
+
+// sigoCallToHost sendet einen Chat-Request an einen bestimmten Host
+func sigoCallToHost(prompt, model, sessionID, host string) (string, error) {
   reqBody := map[string]interface{}{
     "model": model,
     "messages": []map[string]string{
@@ -112,7 +120,7 @@ func sigoCall(prompt, model, sessionID string) (string, error) {
 
   client := &http.Client{Timeout: sigoTimeout}
   resp, err := client.Post(
-    sigoHost+"/v1/chat/completions",
+    host+"/v1/chat/completions",
     "application/json",
     bytes.NewReader(data),
   )
