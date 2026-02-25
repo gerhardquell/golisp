@@ -15,12 +15,18 @@ import (
   "io"
   "net/http"
   "strings"
+  "sync"
   "time"
 )
 
 var (
   sigoHost    = "http://127.0.0.1:9080"
   sigoTimeout = 60 * time.Second
+  // Rate-Limiting: max 1 Request pro 2 Sekunden pro Model
+  sigoRateLimiter = time.Tick(2 * time.Second)
+  // Circuit-Breaker Schutz
+  sigoLastCall    time.Time
+  sigoCallMutex   sync.Mutex
 )
 
 // RegisterSigo fügt (sigo prompt model session-id) in die Umgebung ein
@@ -42,6 +48,18 @@ func fnSigo(args []*Cell) (*Cell, error) {
 
   if len(args) >= 2 { model = args[1].Val }
   if len(args) >= 3 { sessionID = args[2].Val }
+
+  // Rate-Limiting: Warte auf Token im Ticker
+  <-sigoRateLimiter
+
+  // Circuit-Breaker Schutz: mindestens 500ms zwischen Calls
+  sigoCallMutex.Lock()
+  sinceLast := time.Since(sigoLastCall)
+  if sinceLast < 500*time.Millisecond {
+    time.Sleep(500*time.Millisecond - sinceLast)
+  }
+  sigoLastCall = time.Now()
+  sigoCallMutex.Unlock()
 
   result, err := sigoCall(prompt, model, sessionID)
   if err != nil { return nil, err }

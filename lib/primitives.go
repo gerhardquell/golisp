@@ -12,6 +12,7 @@ import (
   "fmt"
   "runtime"
   "sync/atomic"
+  "time"
 )
 
 // BaseEnv erstellt die globale Umgebung mit allen eingebauten Funktionen
@@ -62,6 +63,9 @@ func BaseEnv() *Env {
 
   // Memory-Profiling
   env.Set("memstats", makeFn(fnMemstats))
+
+  // Zeitfunktionen
+  env.Set("sleep", makeFn(fnSleep))
 
   // sigoREST
   RegisterSigo(env)
@@ -312,4 +316,17 @@ func fnMemstats(args []*Cell) (*Cell, error) {
     result = Cons(pair, result)
   }
   return result, nil
+}
+
+// sleep: (sleep ms) → pausiert für n Millisekunden
+func fnSleep(args []*Cell) (*Cell, error) {
+  if len(args) < 1 {
+    return nil, fmt.Errorf("sleep: 1 Argument nötig (Millisekunden)")
+  }
+  ms := int64(args[0].Num)
+  if ms < 0 {
+    return nil, fmt.Errorf("sleep: negative Zeit nicht erlaubt")
+  }
+  time.Sleep(time.Duration(ms) * time.Millisecond)
+  return MakeNil(), nil
 }

@@ -112,6 +112,8 @@ Einzelner Ausdruck → direkt, kein Overhead.
 **Datei:** `file-write` `file-append` `file-read` `file-exists?` `file-delete`
 **Nebenläufigkeit:** `chan-make` `chan-send` `chan-recv` `lock-make`
 **KI:** `sigo` `sigo-models` `sigo-host`
+**Zeit:** `sleep`
+**Memory:** `memstats`
 
 ### REPL (readline.go) – `golisp -i`
 - **Start:** `./golisp -i` (benötigt TTY – im Script/CI kommt Fehlermeldung)
@@ -167,6 +169,20 @@ Endpoint: POST /v1/chat/completions
 
 Verfügbare Modell-Shortcodes: `claude-h` `gemini-p` `gpt41`
 und alle lokalen Ollama-Modelle (z.B. `ollama-gemma3-4b`)
+
+### Rate-Limiting & Best Practices
+
+`sigo` hat automatisches Rate-Limiting eingebaut:
+- **Mindestabstand:** 500ms zwischen Calls
+- **Globaler Ticker:** max 1 Request pro 2 Sekunden
+- **Schutz vor Circuit-Breaker:** Verhindert Server-Überlastung
+
+Für sequenzielle Calls mit Pausen:
+```lisp
+(sigo "Erste Frage" "claude-h")
+(sleep 2000)  ; 2 Sekunden Pause
+(sigo "Zweite Frage" "gemini-p")
+```
 
 ### Das selbsterweiternde Muster
 ```lisp
