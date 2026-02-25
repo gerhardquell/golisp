@@ -326,3 +326,10 @@ Die Codebasis bleibt sauber, die Sprache wird benutzerfreundlicher.
 > "Quick Wins sind das Öl einer Codebasis –
 >  kleine Investition, große Wirkung auf Geschwindigkeit und Moral."
 > — Gerhard & Claude, Februar 2026
+
+---
+---
+
+# Session 4 – Unix-Style CLI
+
+Siehe [`docs/retrospectives/2026-02-25-unix-cli.md`](docs/retrospectives/2026-02-25-unix-cli.md)
