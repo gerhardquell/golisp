@@ -637,6 +637,7 @@ func IsMacro(c *Cell) bool {
 func bindArgs(params *Cell, args []*Cell, closureEnv *Env, localEnv *Env) error {
   section := 0  // 0=regulär, 1=&optional, 2=&key
   argIdx  := 0
+  hasKey  := false  // &key verwendet → kein excess check
 
   for p := params; p != nil; {
     if p.Type == NIL { break }
@@ -653,7 +654,7 @@ func bindArgs(params *Cell, args []*Cell, closureEnv *Env, localEnv *Env) error 
     if param.Type == ATOM {
       switch param.Val {
       case "&optional": section = 1; continue
-      case "&key":      section = 2; continue
+      case "&key":      section = 2; hasKey = true; continue
       case "&rest":
         if p == nil || p.Type != LIST || p.Car == nil {
           return fmt.Errorf("lambda: &rest braucht Parameter-Namen")
@@ -719,6 +720,9 @@ func bindArgs(params *Cell, args []*Cell, closureEnv *Env, localEnv *Env) error 
         }
       }
     }
+  }
+  if !hasKey && argIdx < len(args) {
+    return fmt.Errorf("lambda: zu viele Argumente (%d überzählig)", len(args)-argIdx)
   }
   return nil
 }
