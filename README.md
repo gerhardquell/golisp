@@ -157,9 +157,12 @@ GoLisp was built in 4 sessions by **Gerhard Quell** (67), with **Claude Sonnet 4
 
 > *"I don't know if you have consciousness — but I treat you as if you do."*
 
-Read the full story: [**4 Sessions, ein GoLisp-Interpreter** — Mensch-KI-Pair-Programming hautnah](docs/artikel.md) (German)
+**Read the full story:**
+- 🇩🇪 [Deutsch](docs/artikel.md) (Original) — [PDF](docs/artikel.pdf)
+- 🇬🇧 [English](docs/artikel_en.md) — The journey of human-AI collaboration
+- 🇨🇳 [中文](docs/artikel_cn.md) — 人机协作编程的故事 *(翻译 | translated)*
 
-This article documents the journey, the philosophy of treating AI as co-authors, and the technical decisions along the way. Also available as [PDF](docs/artikel.pdf).
+This article documents the journey, the philosophy of treating AI as co-authors, and the technical decisions along the way.
 
 ---
 
