@@ -26,6 +26,8 @@ func RegisterStringFuncs(env *Env) {
   env.Set("string-downcase", makeFn(fnStringDowncase))
   env.Set("string->number",  makeFn(fnStringToNumber))
   env.Set("number->string",  makeFn(fnNumberToString))
+  env.Set("string->list",    makeFn(fnStringToList))
+  env.Set("list->string",    makeFn(fnListToString))
 }
 
 func fnStringLength(args []*Cell) (*Cell, error) {
@@ -95,4 +97,35 @@ func fnNumberToString(args []*Cell) (*Cell, error) {
     return MakeStr(fmt.Sprintf("%d", int(args[0].Num))), nil
   }
   return MakeStr(fmt.Sprintf("%g", args[0].Num)), nil
+}
+
+// string->list: Wandelt String in Liste von Single-Character-Strings um
+func fnStringToList(args []*Cell) (*Cell, error) {
+  if len(args) < 1 || args[0].Type != STRING {
+    return nil, fmt.Errorf("string->list: String erwartet")
+  }
+  runes := []rune(args[0].Val)
+  result := MakeNil()
+  for i := len(runes) - 1; i >= 0; i-- {
+    result = Cons(MakeStr(string(runes[i])), result)
+  }
+  return result, nil
+}
+
+// list->string: Verkettet Liste von Strings zu einem String
+func fnListToString(args []*Cell) (*Cell, error) {
+  if len(args) < 1 {
+    return nil, fmt.Errorf("list->string: 1 Argument nötig")
+  }
+  lst := args[0]
+  var sb strings.Builder
+  for lst != nil && lst.Type == LIST {
+    elem := lst.Car
+    if elem.Type != STRING {
+      return nil, fmt.Errorf("list->string: Alle Elemente müssen Strings sein")
+    }
+    sb.WriteString(elem.Val)
+    lst = lst.Cdr
+  }
+  return MakeStr(sb.String()), nil
 }

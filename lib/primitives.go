@@ -42,6 +42,16 @@ func BaseEnv() *Env {
   env.Set("null", makeFn(fnNull))
   env.Set("list", makeFn(fnList))
 
+  // Typ-Prädikate
+  env.Set("string?", makeFn(fnStringP))
+  env.Set("number?", makeFn(fnNumberP))
+  env.Set("list?",   makeFn(fnListP))
+  env.Set("symbol?", makeFn(fnSymbolP))
+  // Aliase für Konsistenz
+  env.Set("atom?",   makeFn(fnAtom))
+  env.Set("null?",   makeFn(fnNull))
+  env.Set("eq?",     makeFn(fnEqPtr))
+
   // Ausgabe
   env.Set("print",   makeFn(fnPrint))
   env.Set("read",    makeFn(fnRead))
@@ -328,5 +338,31 @@ func fnSleep(args []*Cell) (*Cell, error) {
     return nil, fmt.Errorf("sleep: negative Zeit nicht erlaubt")
   }
   time.Sleep(time.Duration(ms) * time.Millisecond)
+  return MakeNil(), nil
+}
+
+// ---- Typ-Prädikate ----
+
+func fnStringP(args []*Cell) (*Cell, error) {
+  if len(args) < 1 { return nil, fmt.Errorf("string?: 1 Argument nötig") }
+  if args[0].Type == STRING { return MakeAtom("t"), nil }
+  return MakeNil(), nil
+}
+
+func fnNumberP(args []*Cell) (*Cell, error) {
+  if len(args) < 1 { return nil, fmt.Errorf("number?: 1 Argument nötig") }
+  if args[0].Type == NUMBER { return MakeAtom("t"), nil }
+  return MakeNil(), nil
+}
+
+func fnListP(args []*Cell) (*Cell, error) {
+  if len(args) < 1 { return nil, fmt.Errorf("list?: 1 Argument nötig") }
+  if args[0].Type == NIL || args[0].Type == LIST { return MakeAtom("t"), nil }
+  return MakeNil(), nil
+}
+
+func fnSymbolP(args []*Cell) (*Cell, error) {
+  if len(args) < 1 { return nil, fmt.Errorf("symbol?: 1 Argument nötig") }
+  if args[0].Type == ATOM { return MakeAtom("t"), nil }
   return MakeNil(), nil
 }

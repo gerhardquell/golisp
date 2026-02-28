@@ -96,17 +96,19 @@ Einzelner Ausdruck → direkt, kein Overhead.
 ## Implementierte Features
 
 ### Spezialformen
-`quote` `if` `define` `defun` `lambda` `let` `begin` `set!`
+`quote` `if` `define` `setq` `defun` `lambda` `let` `let*` `begin` `set!` `setq*`
 `defmacro` `mapcar` `load` `and` `or` `not` `parfunc` `lock` `eval`
-`catch` `while` `do` `quasiquote` `cond`
+`catch` `while` `do` `quasiquote` `cond` `case`
 
 ### Eingebaute Funktionen
 **Arithmetik:** `+` `-` `*` `/`
-**Vergleiche:** `=` `<` `>` `>=` `<=` `eq` `equal?`
+**Vergleiche:** `=` `<` `>` `>=` `<=` `eq` `eq?` `equal?`
+**Typ-Prädikate:** `string?` `number?` `list?` `symbol?` `atom?` `null?`
 **Listen:** `car` `cdr` `cons` `atom` `null` `list` `apply`
 **I/O:** `print` `println` `read`
 **String:** `string-length` `string-append` `substring`
   `string-upcase` `string-downcase` `string->number` `number->string`
+  `string->list` `list->string`
 **Fehler:** `error` `catch`
 **Makro-Hilfe:** `gensym`
 **Datei:** `file-write` `file-append` `file-read` `file-exists?` `file-delete`
@@ -279,6 +281,90 @@ während `equal?` strukturelle Gleichheit prüft (gleicher Inhalt).
 
 **Thread-Sicherheit:** Die Singleton-Nil ist sicher für `parfunc` –
 sie wird nur gelesen, nie modifiziert.
+
+---
+
+## eq vs equal? – Wann welchen Vergleich verwenden
+
+| Funktion | Vergleicht | Verwendung |
+|----------|------------|------------|
+| `eq` / `eq?` | Pointer-Identität (identisches Objekt im Speicher) | Schneller Identitätsvergleich für Symbole, Singleton-Objekte |
+| `equal?` | Strukturelle Gleichheit (rekursiver Inhaltsvergleich) | Listen, Strings, Zahlen, verschiedene Atom-Instanzen |
+
+```lisp
+;; eq prüft, ob es DASSELBE Objekt ist
+(eq 'foo 'foo)           ; ()  - zwei verschiedene Atom-Instanzen
+(eq (list) (list))       ; t   - Singleton-Nil, identischer Pointer
+(eq 5 5)                 ; ()  - jede Zahl ist neue Cell
+
+;; equal? prüft, ob der Inhalt gleich ist
+(equal? 'foo 'foo)       ; t   - gleicher Inhalt
+equal? (list 1 2) (list 1 2))  ; t   - gleiche Struktur
+(equal? 5 5)             ; t   - gleicher Wert
+```
+
+**Empfehlung:** Für sichere Vergleiche immer `equal?` verwenden.
+`eq` nur wenn explizite Identitätsprüfung benötigt wird.
+
+---
+
+## let vs let* – Parallele vs sequentielle Bindungen
+
+| Form | Bindungsmodus | Verwendung |
+|------|---------------|------------|
+| `let` | Parallel – alle Werte werden im äußeren env ausgewertet | Unabhängige Variablen |
+| `let*` | Sequentiell – jede Bindung sieht die vorherigen | Abhängige Variablen (z.B. `(y (+ x 1))`) |
+
+```lisp
+;; let – parallele Bindungen
+(let ((x 5)
+      (y (+ x 1)))      ; Fehler: x ist noch nicht gebunden!
+  ...)
+
+;; let* – sequentielle Bindungen
+(let* ((x 5)
+       (y (+ x 1)))     ; OK: x ist bereits 5
+  y)                    ; → 6
+```
+
+---
+
+## setq und setq* – Common Lisp Kompatibilität
+
+`setq` ist ein Alias für `define` – setzt eine Variable global oder lokal:
+```lisp
+(setq x 10)              ; → x (Variable wird gesetzt)
+x                        ; → 10
+```
+
+`setq*` setzt mehrere Variablen sequentiell:
+```lisp
+(setq* a 1
+       b (+ a 1)         ; b sieht a = 1
+       c (+ b 1))        ; c sieht b = 2
+(list a b c)             ; → (1 2 3)
+```
+
+---
+
+## case – Syntaktischer Zucker für cond
+
+`case` vergleicht einen Schlüsselwert mit mehreren Alternativen:
+
+```lisp
+(case 'b
+  ((a) 1)                ; einzelner Wert
+  ((b c) 2)              ; Liste von Werten
+  (else 3))              ; → 2
+
+(case 5
+  ((1 2 3) "klein")
+  ((4 5 6) "mittel")
+  (else "groß"))         ; → "mittel"
+```
+
+Der Vergleich erfolgt mit `equal?` (strukturelle Gleichheit).
+`else` oder `t` als Test fungiert als Default-Fall.
 
 ---
 

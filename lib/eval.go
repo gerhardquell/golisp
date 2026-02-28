@@ -37,11 +37,12 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
       // ── Nicht-Tail: Ergebnis sofort zurückgeben ──
       case "quote":        return expr.Cdr.Car, nil
       case "macroexpand":  return evalMacroexpand(expr.Cdr, env)
-      case "define":       return evalDefine(expr.Cdr, env)
+      case "define", "setq":  return evalDefine(expr.Cdr, env)
       case "defun":        return evalDefun(expr.Cdr, env)
       case "defmacro":     return evalDefmacro(expr.Cdr, env)
       case "lambda":       return evalLambda(expr.Cdr, env)
       case "set!":         return evalSet(expr.Cdr, env)
+      case "setq*":        return evalSetQStar(expr.Cdr, env)
       case "mapcar":       return evalMapcar(expr.Cdr, env)
       case "load":         return evalLoad(expr.Cdr, env)
       case "and":          return evalAnd(expr.Cdr, env)
@@ -111,6 +112,31 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
         env = localEnv
         continue
 
+      case "let*":
+        localEnv := NewEnv(env)
+        bindings := expr.Cdr.Car
+        // Sequentielle Bindungen: jede sieht die vorherigen
+        for bindings != nil && bindings.Type == LIST {
+          b := bindings.Car
+          val, err := Eval(b.Cdr.Car, localEnv)  // Im lokalen env auswerten!
+          if err != nil { return nil, err }
+          localEnv.Set(b.Car.Val, val)
+          bindings = bindings.Cdr
+        }
+        // Body ausführen
+        body := expr.Cdr.Cdr
+        if body == nil {
+          return MakeNil(), nil
+        }
+        for body.Cdr != nil && body.Cdr.Type == LIST {
+          _, err := Eval(body.Car, localEnv)
+          if err != nil { return nil, err }
+          body = body.Cdr
+        }
+        expr = body.Car
+        env = localEnv
+        continue
+
       case "cond":
         matched := false
         for c := expr.Cdr; c != nil && c.Type == LIST; c = c.Cdr {
@@ -138,6 +164,12 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
           }
         }
         if !matched { return MakeNil(), nil }
+        continue
+
+      case "case":
+        e, newEnv, err := evalCase(expr.Cdr, env)
+        if err != nil { return nil, err }
+        expr, env = e, newEnv
         continue
       }
     }
@@ -351,6 +383,33 @@ func evalSet(args *Cell, env *Env) (*Cell, error) {
   val, err := Eval(args.Cdr.Car, env)
   if err != nil { return nil, err }
   return MakeAtom(args.Car.Val), env.Update(args.Car.Val, val)
+}
+
+// setq*: (setq* var1 val1 var2 val2 ...) → sequentielles Setzen
+func evalSetQStar(args *Cell, env *Env) (*Cell, error) {
+  if args == nil || args.Type != LIST {
+    return nil, fmt.Errorf("setq*: Syntax: (setq* var1 val1 var2 val2 ...)")
+  }
+  var lastName string
+  for a := args; a != nil && a.Type == LIST; a = a.Cdr.Cdr {
+    if a.Car == nil || a.Car.Type != ATOM {
+      return nil, fmt.Errorf("setq*: Variable muss ein Symbol sein")
+    }
+    name := a.Car.Val
+    lastName = name
+    if a.Cdr == nil || a.Cdr.Type != LIST {
+      return nil, fmt.Errorf("setq*: Wert für '%s' fehlt", name)
+    }
+    val, err := Eval(a.Cdr.Car, env)
+    if err != nil { return nil, err }
+    // Update existierende Variable oder neu definieren
+    if _, getErr := env.Get(name); getErr == nil {
+      env.Update(name, val)  // Existiert → updaten
+    } else {
+      env.Set(name, val)     // Neu → definieren
+    }
+  }
+  return MakeAtom(lastName), nil
 }
 
 func isTruthy(c *Cell) bool {
@@ -827,4 +886,46 @@ func evalCatch(args *Cell, env *Env) (*Cell, error) {
   handler, err := Eval(args.Cdr.Car, env)
   if err != nil { return nil, err }
   return apply(handler, []*Cell{lispErr.Msg})
+}
+
+// case: (case key-expr ((val1 val2) result1) (else result3) ...)
+// Syntaktischer Zucker fuer cond mit strukturellem Vergleich.
+func evalCase(args *Cell, env *Env) (*Cell, *Env, error) {
+  if args == nil || args.Type != LIST {
+    return nil, nil, fmt.Errorf("case: Syntax: (case key-expr clause...)")
+  }
+  key, err := Eval(args.Car, env)
+  if err != nil { return nil, nil, err }
+
+  for clauses := args.Cdr; clauses != nil && clauses.Type == LIST; clauses = clauses.Cdr {
+    clause := clauses.Car
+    if clause == nil || clause.Type != LIST { continue }
+
+    test := clause.Car
+    isElse := test.Type == ATOM && (test.Val == "else" || test.Val == "t")
+
+    match := false
+    if !isElse && test.Type == LIST {
+      // Liste von Werten: ((a b c) result)
+      for vals := test; vals != nil && vals.Type == LIST; vals = vals.Cdr {
+        if cellEqual(key, vals.Car) { match = true; break }
+      }
+    } else if !isElse {
+      // Einzelner Wert: (a result)
+      if cellEqual(key, test) { match = true }
+    }
+
+    if isElse || match {
+      body := clause.Cdr
+      if body == nil || body.Type != LIST { return MakeNil(), env, nil }
+      // Evaluiere alle Ausdruecke ausser dem letzten
+      for body.Cdr != nil && body.Cdr.Type == LIST {
+        _, err := Eval(body.Car, env)
+        if err != nil { return nil, nil, err }
+        body = body.Cdr
+      }
+      return body.Car, env, nil
+    }
+  }
+  return MakeNil(), env, nil
 }
