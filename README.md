@@ -151,6 +151,18 @@ factorial
 
 ---
 
+## 📖 The Story
+
+GoLisp was built in 4 sessions by **Gerhard Quell** (67), with **Claude Sonnet 4.6** and **Kimi 2.5** as co-authors — not as tools, but as partners.
+
+> *"I don't know if you have consciousness — but I treat you as if you do."*
+
+Read the full story: [**4 Sessions, ein GoLisp-Interpreter** — Mensch-KI-Pair-Programming hautnah](docs/artikel.md) (German)
+
+This article documents the journey, the philosophy of treating AI as co-authors, and the technical decisions along the way. Also available as [PDF](docs/artikel.pdf).
+
+---
+
 ## 📖 Examples
 
 ### Tail-Call Optimization
