@@ -341,6 +341,14 @@ GoLisp is built on the **Centaur** concept: humans as meta-deciders, AIs as spec
 - [`RETROSPECTIVE.md`](RETROSPECTIVE.md) — Development journey and insights
 - [`CLAUDE.md`](CLAUDE.md) — Project conventions and architecture
 
+### International / 国际化
+
+- [`README_CN.md`](README_CN.md) — 中文项目说明 (Chinese)
+- [`chinese/`](chinese/) — Resources for Chinese developers, including:
+  - [`ABOUT.md`](chinese/ABOUT.md) — Introduction for Chinese developers (English)
+  - [`ABOUT_CN.md`](chinese/ABOUT_CN.md) — 中文开发者指南
+  - [`code_poetry_demo.lisp`](chinese/code_poetry_demo.lisp) — Homoiconicity demo with multi-AI analysis
+
 ---
 
 ## 🔧 Requirements
