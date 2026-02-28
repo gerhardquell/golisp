@@ -108,11 +108,11 @@
       (let ((tok (car tokens)))
         (cond
           ;; Fraktal-Operatoren
-          ((eq? tok '>) (kiesp-level-1))
-          ((eq? tok '>>) (kiesp-level-2))
-          ((eq? tok '>>>) (kiesp-level-3))
-          ((eq? tok '>>>>) (kiesp-level-4))
-          ((eq? tok 'P) (kiesp-pipe))
+          ((equal? tok '>) (kiesp-level-1))
+          ((equal? tok '>>) (kiesp-level-2))
+          ((equal? tok '>>>) (kiesp-level-3))
+          ((equal? tok '>>>>) (kiesp-level-4))
+          ((equal? tok 'P) (kiesp-pipe))
           ;; Standard: Auf Stack legen
           (else (kiesp-push tok)))
         (kiesp-encode-list (cdr tokens)))))
@@ -121,13 +121,14 @@
   "Dekodiert eine KIESP-Expression zurueck in Tokens"
   (if (atom expr)
       (list expr)
-      (case (car expr)
-        ('action (list (caddr expr) (cadr expr) '>))
-        ('iterate (list (cadddr expr) (caddr expr) (cadr expr) '>>))
-        ('recurse (list (cadddr expr) (caddr expr) (cadr expr) '>>>))
-        ('meta (list (cadddr expr) (caddr expr) (cadr expr) '>>>>))
-        ('pipe (append (kiesp-decode (cadr expr)) (kiesp-decode (caddr expr)) '(P)))
-        (else expr))))
+      (let ((tag (car expr)))
+        (cond
+          ((equal? tag 'action) (list (caddr expr) (cadr expr) '>))
+          ((equal? tag 'iterate) (list (cadddr expr) (caddr expr) (cadr expr) '>>))
+          ((equal? tag 'recurse) (list (cadddr expr) (caddr expr) (cadr expr) '>>>))
+          ((equal? tag 'meta) (list (cadddr expr) (caddr expr) (cadr expr) '>>>>))
+          ((equal? tag 'pipe) (append (kiesp-decode (cadr expr)) (kiesp-decode (caddr expr)) '(P)))
+          (else expr)))))
 
 ;;; Statistik
 
