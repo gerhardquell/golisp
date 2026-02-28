@@ -95,7 +95,19 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
           localEnv.Set(b.Car.Val, val)
           bindings = bindings.Cdr
         }
-        expr = expr.Cdr.Cdr.Car
+        // Handle multiple body expressions in let
+        body := expr.Cdr.Cdr
+        if body == nil {
+          return MakeNil(), nil
+        }
+        // Evaluate all but the last expression
+        for body.Cdr != nil && body.Cdr.Type == LIST {
+          _, err := Eval(body.Car, localEnv)
+          if err != nil { return nil, err }
+          body = body.Cdr
+        }
+        // Tail call optimization for the last expression
+        expr = body.Car
         env = localEnv
         continue
 

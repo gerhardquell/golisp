@@ -40,7 +40,7 @@
 
 (defun kiesp-process-words (words)
   "Verarbeitet Wortliste fuer Haeufigkeit"
-  (if (null? words)
+  (if (null words)
       'done
       (begin
         (kiesp-increment-count (car words))
@@ -66,13 +66,13 @@
 
 (defun kiesp-insertion-sort (lst)
   "Sortiert Liste nach Haeufigkeit"
-  (if (null? lst)
+  (if (null lst)
       '()
       (kiesp-insert (car lst) (kiesp-insertion-sort (cdr lst)))))
 
 (defun kiesp-insert (item sorted)
   "Fuegt Item sortiert ein"
-  (if (null? sorted)
+  (if (null sorted)
       (list item)
       (if (not (< (cdr item) (cdr (car sorted))))
           (cons item sorted)
@@ -96,7 +96,7 @@
 
 (defun kiesp-add-entries (freqs max n)
   "Fuegt Eintraege hin bis max erreicht"
-  (if (or (null? freqs) (not (< n max)))
+  (if (or (null freqs) (not (< n max)))
       (list kiesp-dictionary kiesp-reverse-dict)
       (let ((word (caar freqs))
             (token (kiesp-generate-token n)))
@@ -108,17 +108,8 @@
 
 (defun kiesp-generate-token (n)
   "Generiert kurzes Token fuer Index n"
-  ;; Verwendet 1-2 Zeichen: 0-9, a-z, A-Z
-  (cond
-    ((< n 10) (substring (number->string n) 0 1))
-    ((< n 36) (list->string (list (kiesp-int->char n))))
-    (else (string-append
-            (kiesp-generate-token (quotient n 62))
-            (kiesp-generate-token (remainder n 62))))))
-
-(defun kiesp-int->char (n)
-  "Konvertiert 10-35 zu a-z"
-  (+ n 87))  ; ASCII 'a' ist 97, wir starten bei 10
+  ;; Verwendet nur Ziffern 0-9 fuer Einfachheit
+  (number->string n))
 
 ;;; Encoder/Decoder
 
@@ -129,23 +120,23 @@
 
 (defun kiesp-encode-words (words)
   "Kodiert Wortliste"
-  (if (null? words)
+  (if (null words)
       '()
-      (let ((word (car words))
-            (pair (assoc word kiesp-dictionary)))
-        (cons (if pair (cdr pair) word)
-              (kiesp-encode-words (cdr words))))))
+      (let ((word (car words)))
+        (let ((pair (assoc word kiesp-dictionary)))
+          (cons (if pair (cdr pair) word)
+                (kiesp-encode-words (cdr words)))))))
 
 (defun kiesp-decode-dict (tokens)
   "Dekodiert Token-Liste"
-  (if (null? tokens)
+  (if (null tokens)
       ""
-      (let ((token (car tokens))
-            (pair (assoc token kiesp-reverse-dict)))
-        (string-append
-          (if pair (cdr pair) token)
-          " "
-          (kiesp-decode-dict (cdr tokens))))))
+      (let ((token (car tokens)))
+        (let ((pair (assoc token kiesp-reverse-dict)))
+          (string-append
+            (if pair (cdr pair) token)
+            " "
+            (kiesp-decode-dict (cdr tokens)))))))
 
 ;;; Statistik
 
@@ -158,16 +149,15 @@
       (cons 'original-chars orig-len)
       (cons 'encoded-tokens enc-len)
       (cons 'dictionary-size dict-size)
-      (cons 'avg-token-len (/ (kiesp-total-token-len encoded) enc-len))
-      (cons 'compression-ratio (/ (* 1.0 enc-len) (kiesp-count-words original))))))
+      (cons 'avg-token-len (if (= enc-len 0) 0 (/ (kiesp-total-token-len encoded) enc-len)))
+      (cons 'compression-ratio (let ((word-count (kiesp-count-words original)))
+                                 (if (= word-count 0) 0.0 (/ (* 1.0 enc-len) word-count)))))))
 
 (defun kiesp-total-token-len (tokens)
   "Summiert Token-Laengen"
-  (if (null? tokens)
+  (if (null tokens)
       0
-      (+ (string-length (if (string? (car tokens))
-                            (car tokens)
-                            (symbol->string (car tokens))))
+      (+ (string-length (car tokens))
          (kiesp-total-token-len (cdr tokens)))))
 
 ;;; Hilfsfunktionen fuer Mutability (simuliert)

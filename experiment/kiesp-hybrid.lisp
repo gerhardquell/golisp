@@ -13,7 +13,7 @@
       ((kiesp-codep text) 'code)
       ((kiesp-narrativep text) 'narrative)
       ((kiesp-datap text) 'data)
-      (else 'general))))
+      (else 'general)))
   kiesp-context)
 
 (defun kiesp-codep (text)
@@ -35,37 +35,34 @@
       (kiesp-has text "[")
       (kiesp-has text ": ")))
 
-(defun kiesp-has (text substr)
-  "Prueft ob String enthalten"
-  (kiesp-has-help text substr 0))
-
 (defun kiesp-has-help (text substr start)
   "Hilfsfunktion"
   (if (> (+ start (string-length substr)) (string-length text))
       '()
-      (if (string=? (substring text start (+ start (string-length substr))) substr)
+      (if (equal? (substring text start (+ start (string-length substr))) substr)
           't
           (kiesp-has-help text substr (+ start 1)))))
 
-;;; Encoder
+(defun kiesp-has (text substr)
+  "Prueft ob String enthalten"
+  (kiesp-has-help text substr 0))
 
 (defun kiesp-encode (text)
   "Waehlt Encoder"
   (kiesp-detect-context text)
-  (case kiesp-context
-    ('code (kiesp-encode-code text))
-    ('narrative (kiesp-encode-narrative text))
-    ('data (kiesp-encode-data text))
+  (cond
+    ((eq kiesp-context 'code) (kiesp-encode-code text))
+    ((eq kiesp-context 'narrative) (kiesp-encode-narrative text))
+    ((eq kiesp-context 'data) (kiesp-encode-data text))
     (else (kiesp-encode-narrative text))))
 
 (defun kiesp-encode-code (text)
   "Kodiert Code"
-  (let ((expr (read (string-append "(" text ")"))))
-    (list
-      (cons 'context 'code)
-      (cons 'method 'sexp)
-      (cons 'compressed (kiesp-compress expr))
-      (cons 'original-tokens (length (flatten expr))))))
+  (list
+    (cons 'context 'code)
+    (cons 'method 'sexp)
+    (cons 'compressed 'code-markers)
+    (cons 'original-chars (string-length text))))
 
 (defun kiesp-encode-narrative (text)
   "Kodiert Narrativ"
@@ -86,11 +83,9 @@
       (cons 'compressed 'stack-mode)
       (cons 'original-tokens (length tokens)))))
 
-;;; Effizienz
-
 (defun kiesp-measure (original encoded)
   "Misst Effizienz"
-  (let ((orig-size (kiesp-size original))
+  (let ((orig-size (max 1 (kiesp-size original)))
         (enc-size (kiesp-size encoded)))
     (list
       (cons 'original-bytes orig-size)
@@ -102,19 +97,17 @@
 (defun kiesp-size (x)
   "Schaetzt Groesse"
   (cond
-    ((null? x) 2)
-    ((string? x) (string-length x))
-    ((number? x) 8)
-    ((atom? x) (string-length (symbol->string x)))
+    ((null x) 2)
+    ((atom x) 8)
     (else (+ 2 (kiesp-size (car x)) (kiesp-size (cdr x))))))
 
 (defun kiesp-eff-score (orig enc)
   "Effizienz-Score"
-  (let ((compression (- 1.0 (/ enc orig)))
-        (overhead (if (< enc orig) 0.0 (- 1.0 (/ orig enc)))))
-    (* 50.0 (+ compression (- 1.0 overhead)))))
-
-;;; Benchmark
+  (if (= orig 0)
+      0.0
+      (let ((compression (- 1.0 (/ enc orig)))
+            (overhead (if (< enc orig) 0.0 (- 1.0 (/ orig (max 1 enc))))))
+        (* 50.0 (+ compression (- 1.0 overhead))))))
 
 (define kiesp-benchmark-results '())
 
@@ -140,15 +133,13 @@
 
 (defun kiesp-print-results (results)
   "Druckt Ergebnisse"
-  (if (null? results)
+  (if (null results)
       (println "=== Ende Report ===")
       (begin
         (println "Test: " (cdr (assoc 'name (car results))))
         (println "  Context: " (cdr (assoc 'context (car results))))
         (println "  Stats:   " (cdr (assoc 'measurement (car results))))
         (kiesp-print-results (cdr results)))))
-
-;;; Test-Texte
 
 (define kiesp-test-code
   "(define factorial (lambda (n) (if (= n 0) 1 (* n (factorial (- n 1))))))")

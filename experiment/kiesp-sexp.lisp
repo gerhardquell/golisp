@@ -76,7 +76,7 @@
 
 (defun kiesp-reverse-assoc (val alist)
   "Findet Schluessel fuer einen Wert in einer Assoziationsliste"
-  (if (null? alist)
+  (if (null alist)
       '()
       (if (eq val (cdar alist))
           (caar alist)
@@ -118,7 +118,7 @@
 
 (defun kiesp-str (&rest parts)
   "Baut einen String aus Teilen"
-  (if (null? parts)
+  (if (null parts)
       ""
       (string-append (kiesp-val (car parts))
                      (apply kiesp-str (cdr parts)))))
@@ -126,8 +126,7 @@
 (defun kiesp-val (x)
   "Konvertiert einen Wert zu String"
   (cond
-    ((string? x) x)
-    ((number? x) (number->string x))
+    ((atom x) (number->string x))
     (else "")))
 
 ;;; Beispiel-Programme
@@ -140,7 +139,7 @@
 
 (define kiesp-example-map
   '(def my-map (fn (f xs)
-     (if? (null? xs)
+     (if? (null xs)
        '()
        (DO (c (f (ca xs)) (my-map f (cd xs))))))))
 
@@ -167,9 +166,8 @@
 (defun kiesp-expr->string (expr)
   "Konvertiert Expression zu String"
   (cond
-    ((null? expr) "()")
-    ((number? expr) (number->string expr))
-    ((atom? expr) "atom")
+    ((null expr) "()")
+    ((atom expr) (number->string expr))
     (else
      (string-append "(pair)"))))
 

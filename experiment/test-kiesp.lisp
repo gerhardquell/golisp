@@ -51,7 +51,7 @@
     (kiesp-clear)
     (kiesp-push 'data)
     (kiesp-push 'G)
-    (>)
+    (kiesp-level-1)
     (kiesp-peek))
   (list 'action "generate" 'data))
 
@@ -61,7 +61,7 @@
     (kiesp-push 'text)
     (kiesp-push 3)
     (kiesp-push 'C)
-    (>>)
+    (kiesp-level-2)
     (kiesp-peek))
   (list 'iterate "create" 3 'text))
 

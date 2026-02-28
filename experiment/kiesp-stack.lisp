@@ -58,27 +58,27 @@
 
 ;;; Fraktale Verben (Postfix-Notation)
 
-(defun > ()
+(defun kiesp-level-1 ()
   "Ebene 1: Einfache Aktion ausfuehren"
   (let ((verb (kiesp-pop))
         (arg (kiesp-pop)))
     (kiesp-push (list 'action (kiesp-verb verb) arg))))
 
-(defun >> ()
+(defun kiesp-level-2 ()
   "Ebene 2: Iterierte Aktion"
   (let ((verb (kiesp-pop))
         (count (kiesp-pop))
         (arg (kiesp-pop)))
     (kiesp-push (list 'iterate (kiesp-verb verb) count arg))))
 
-(defun >>> ()
+(defun kiesp-level-3 ()
   "Ebene 3: Rekursive Transformation"
   (let ((verb (kiesp-pop))
         (depth (kiesp-pop))
         (arg (kiesp-pop)))
     (kiesp-push (list 'recurse (kiesp-verb verb) depth arg))))
 
-(defun >>>> ()
+(defun kiesp-level-4 ()
   "Ebene 4: Meta-Operation"
   (let ((verb (kiesp-pop))
         (meta (kiesp-pop))
@@ -103,15 +103,15 @@
 
 (defun kiesp-encode-list (tokens)
   "Hilfsfunktion fuer Encoding"
-  (if (null? tokens)
+  (if (null tokens)
       'done
       (let ((tok (car tokens)))
         (cond
           ;; Fraktal-Operatoren
-          ((eq? tok '>) (>))
-          ((eq? tok '>>) (>>))
-          ((eq? tok '>>>) (>>>))
-          ((eq? tok '>>>>) (>>>>))
+          ((eq? tok '>) (kiesp-level-1))
+          ((eq? tok '>>) (kiesp-level-2))
+          ((eq? tok '>>>) (kiesp-level-3))
+          ((eq? tok '>>>>) (kiesp-level-4))
           ((eq? tok 'P) (kiesp-pipe))
           ;; Standard: Auf Stack legen
           (else (kiesp-push tok)))
@@ -119,7 +119,7 @@
 
 (defun kiesp-decode (expr)
   "Dekodiert eine KIESP-Expression zurueck in Tokens"
-  (if (atom? expr)
+  (if (atom expr)
       (list expr)
       (case (car expr)
         ('action (list (caddr expr) (cadr expr) '>))
@@ -145,8 +145,8 @@
 
 (defun flatten (x)
   "Flacht eine verschachtelte Liste"
-  (if (atom? x)
-      (if (null? x) '() (list x))
+  (if (atom x)
+      (if (null x) '() (list x))
       (append (flatten (car x)) (flatten (cdr x)))))
 
 ;;; Beispiele

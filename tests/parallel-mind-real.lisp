@@ -14,9 +14,9 @@
 
 ;; Verfügbare Modelle prüfen
 (println "Verfügbare Modelle:")
-(println "  - claude-h (Claude Haiku)")
 (println "  - gemini-p (Gemini Pro)")
-(println "  - gpt41 (GPT-4.1)")
+(println "  - kimi (Kimi K2.5)")
+(println "  - deepseek-v3 (DeepSeek V3)")
 (println "")
 
 ;; Das Problem, das wir lösen wollen
@@ -32,28 +32,28 @@
 (println "")
 
 (parfunc perspectives
-  ;; Perspektive 1: Claude – fokussiert auf Klarheit
+  ;; Perspektive 1: Gemini Pro – fokussiert auf Klarheit
   (sigo (string-append "Gib eine präzise, klare Antwort in einem Satz: " problem)
-        "claude-h")
-
-  ;; Perspektive 2: Gemini – fokussiert auf Kreativität
-  (sigo (string-append "Gib eine kreative, bildliche Antwort in einem Satz: " problem)
         "gemini-p")
 
-  ;; Perspektive 3: GPT-4 – fokussiert auf Technik
+  ;; Perspektive 2: Kimi – fokussiert auf Kreativität
+  (sigo (string-append "Gib eine kreative, bildliche Antwort in einem Satz: " problem)
+        "kimi")
+
+  ;; Perspektive 3: Deepseek – fokussiert auf Technik
   (sigo (string-append "Gib eine technisch prägnante Antwort in einem Satz: " problem)
-        "gpt41"))
+        "deepseek-v3"))
 
 ;; Zeige gesammelte Perspektiven
 (println "Gesammelte Perspektiven (ECHTE KI-Antworten):")
 (println "-----------------------------------------------")
-(println "Claude (Haiku):")
+(println "Gemini (Pro):")
 (println (car perspectives))
 (println "")
-(println "Gemini (Pro):")
+(println "Kimi (K2.5):")
 (println (cadr perspectives))
 (println "")
-(println "GPT-4.1:")
+(println "DeepSeek (V3):")
 (println (caddr perspectives))
 (println "")
 
@@ -61,19 +61,19 @@
 (define synthesis-prompt
   (string-append
    "Synthetisiere diese drei Perspektiven zu einer prägnanten Erklärung in einem Satz:\n\n"
-   "1. Claude: " (car perspectives) "\n"
-   "2. Gemini: " (cadr perspectives) "\n"
-   "3. GPT-4: " (caddr perspectives) "\n\n"
+   "1. Gemini: " (car perspectives) "\n"
+   "2. Kimi: " (cadr perspectives) "\n"
+   "3. DeepSeek: " (caddr perspectives) "\n\n"
    "Gib nur die synthetisierte Antwort."))
 
-(println "Synthese-Prompt für Meta-KI (Claude):")
+(println "Synthese-Prompt für Meta-KI (Gemini):")
 (println "--------------------------------------")
 (println synthesis-prompt)
 (println "")
 
 ;; Synthese durchführen
 (println "Führe Synthese durch...")
-(define synthesis (sigo synthesis-prompt "claude-h"))
+(define synthesis (sigo synthesis-prompt "gemini-p"))
 
 (println "")
 (println "=== SYNTHETISIERTES ERGEBNIS ===")
@@ -84,12 +84,12 @@
 (print-header "Performance-Analyse")
 
 (println "Sequentielle Ausführung würde dauern:")
-(println "  Zeit = Summe(Claude) + Summe(Gemini) + Summe(GPT-4)")
+(println "  Zeit = Summe(Gemini) + Summe(Kimi) + Summe(DeepSeek)")
 (println "       ≈ 2s + 2s + 2s = ~6 Sekunden")
 (println "")
 
 (println "Parallele Ausführung mit parfunc:")
-(println "  Zeit = Max(Claude, Gemini, GPT-4)")
+(println "  Zeit = Max(Gemini, Kimi, DeepSeek)")
 (println "       ≈ 2-3 Sekunden")
 (println "       = 2-3x schneller!")
 (println "")
