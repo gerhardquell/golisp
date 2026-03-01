@@ -93,9 +93,10 @@ func (c *Client) Ping() error {
 
 // Eval wertet Lisp-Code aus
 func (c *Client) Eval(code string) (string, error) {
-	// Code escapen
+	// Code escapen (Backslashes, Anführungszeichen und Newlines)
 	escaped := strings.ReplaceAll(code, "\\", "\\\\")
 	escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
+	escaped = strings.ReplaceAll(escaped, "\n", "\\n")
 
 	params := fmt.Sprintf("(\"%s\")", escaped)
 	resp, err := c.Send("eval", params)

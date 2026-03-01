@@ -1,7 +1,7 @@
-# Go binaries
-golisp
-golispd
-golisp-client
+# Go binaries (root level only)
+/golisp
+/golispd
+/golisp-client
 
 # Build artifacts
 *.test
