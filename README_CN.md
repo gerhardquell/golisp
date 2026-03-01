@@ -264,6 +264,57 @@ results  ; => (42 123 6)
 
 ---
 
+## 📚 库搜索路径
+
+GoLisp 的 `load` 函数通过定义的搜索路径列表查找库，类似于 Python 的 `sys.path` 或 shell 的 `PATH` 变量。
+
+### 搜索顺序
+
+当您调用 `(load "filename.lisp")` 时，GoLisp 按以下顺序搜索：
+
+1. **按原样** — 当前目录或绝对/相对路径
+2. **`/lib/golib`** — 系统范围的库
+3. **`/usr/local/lib/golib`** — 本地系统库
+4. **`./golib`** — 项目本地库
+5. **`GOLISP_PATH`** — 环境变量中冒号分隔的自定义路径
+
+### 示例
+
+```lisp
+; 从当前目录加载（向后兼容）
+(load "myscript.lisp")
+
+; 从 ./golib/ 子目录加载
+; （搜索 ./golib/utils.lisp）
+(load "utils.lisp")
+
+; 绝对路径照常工作
+(load "/home/user/projects/common/stdlib.lisp")
+```
+
+### 设置自定义路径
+
+```bash
+# 添加自定义库目录
+export GOLISP_PATH=/opt/golisp:/home/user/mylisp
+
+./golisp -e '(load "mylib.lisp")'  ; 也搜索 GOLISP_PATH
+```
+
+### 项目结构示例
+
+```
+my-project/
+├── golib/              # 项目本地库
+│   ├── utils.lisp
+│   └── helpers.lisp
+├── main.lisp           # 入口点: (load "utils.lisp")
+└── tests/
+    └── test-main.lisp  ; 也可以 (load "utils.lisp")
+```
+
+---
+
 ## 🛠️ 语言参考
 
 ### 特殊形式
@@ -292,7 +343,7 @@ results  ; => (42 123 6)
 | **比较运算** | `=`、`<`、`>`、`>=`、`<=`、`equal?` |
 | **列表操作** | `car`、`cdr`、`cons`、`list`、`atom`、`null`、`apply`、`mapcar` |
 | **字符串操作** | `string-length`、`string-append`、`substring`、`string-upcase`、`string-downcase`、`string->number`、`number->string` |
-| **输入输出** | `print`、`println`、`read`、`load` |
+| **输入输出** | `print`、`println`、`read`、`load`（带搜索路径） |
 | **文件操作** | `file-write`、`file-append`、`file-read`、`file-exists?`、`file-delete` |
 | **并发** | `chan-make`、`chan-send`、`chan-recv`、`lock-make` |
 | **AI** | `sigo`、`sigo-models`、`sigo-host` |

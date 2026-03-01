@@ -15,6 +15,41 @@ import (
   "sync"
 )
 
+var librarySearchPaths []string
+var searchPathsInitialized bool
+
+func initSearchPaths() []string {
+  var paths []string
+  paths = append(paths, "/lib/golib")
+  paths = append(paths, "/usr/local/lib/golib")
+  paths = append(paths, "./golib")
+  if golispPath := os.Getenv("GOLISP_PATH"); golispPath != "" {
+    for _, p := range strings.Split(golispPath, ":") {
+      if p != "" {
+        paths = append(paths, p)
+      }
+    }
+  }
+  return paths
+}
+
+func resolveLibraryPath(filename string) (string, error) {
+  if !searchPathsInitialized {
+    librarySearchPaths = initSearchPaths()
+    searchPathsInitialized = true
+  }
+  if _, err := os.Stat(filename); err == nil {
+    return filename, nil
+  }
+  for _, dir := range librarySearchPaths {
+    fullPath := dir + "/" + filename
+    if _, err := os.Stat(fullPath); err == nil {
+      return fullPath, nil
+    }
+  }
+  return "", fmt.Errorf("'%s' nicht gefunden in Suchpfaden", filename)
+}
+
 func Eval(expr *Cell, env *Env) (*Cell, error) {
   for {
     if expr == nil { return MakeNil(), nil }
@@ -442,11 +477,18 @@ func evalMapcar(args *Cell, env *Env) (*Cell, error) {
 
 // load: (load "datei.lisp") → liest und wertet alle Ausdrücke aus
 func evalLoad(args *Cell, env *Env) (*Cell, error) {
-  filename, err := Eval(args.Car, env)
+  filenameCell, err := Eval(args.Car, env)
   if err != nil { return nil, err }
 
-  data, err := os.ReadFile(filename.Val)
-  if err != nil { return nil, fmt.Errorf("load: '%s' nicht gefunden", filename.Val) }
+  resolvedPath, err := resolveLibraryPath(filenameCell.Val)
+  if err != nil {
+    return nil, fmt.Errorf("load: %v", err)
+  }
+
+  data, err := os.ReadFile(resolvedPath)
+  if err != nil {
+    return nil, fmt.Errorf("load: '%s' nicht lesbar: %w", resolvedPath, err)
+  }
 
   src := strings.TrimSpace(string(data))
   var result *Cell
@@ -458,10 +500,10 @@ func evalLoad(args *Cell, env *Env) (*Cell, error) {
     if r.pos >= len(r.src) { break }
 
     expr, err := r.readExpr()
-    if err != nil { return nil, fmt.Errorf("load %s: %w", filename.Val, err) }
+    if err != nil { return nil, fmt.Errorf("load %s: %w", resolvedPath, err) }
 
     result, err = Eval(expr, env)
-    if err != nil { return nil, fmt.Errorf("load %s: %w", filename.Val, err) }
+    if err != nil { return nil, fmt.Errorf("load %s: %w", resolvedPath, err) }
   }
   return result, nil
 }

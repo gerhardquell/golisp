@@ -279,6 +279,57 @@ results  ; => (42 123 13)
 
 ---
 
+## 📚 Library Search Path
+
+GoLisp's `load` function searches for libraries through a defined path list, similar to Python's `sys.path` or the shell's `PATH` variable.
+
+### Search Order
+
+When you call `(load "filename.lisp")`, GoLisp searches in this order:
+
+1. **As-is** — Current directory or absolute/relative path
+2. **`/lib/golib`** — System-wide libraries
+3. **`/usr/local/lib/golib`** — Local system libraries
+4. **`./golib`** — Project-local libraries
+5. **`GOLISP_PATH`** — Colon-separated custom paths from environment variable
+
+### Examples
+
+```lisp
+; Load from current directory (backward compatible)
+(load "myscript.lisp")
+
+; Load from ./golib/ subdirectory
+; (searches ./golib/utils.lisp)
+(load "utils.lisp")
+
+; Absolute paths work as always
+(load "/home/user/projects/common/stdlib.lisp")
+```
+
+### Setting Custom Paths
+
+```bash
+# Add custom library directories
+export GOLISP_PATH=/opt/golisp:/home/user/mylisp
+
+./golisp -e '(load "mylib.lisp")'  ; Searches GOLISP_PATH too
+```
+
+### Project Structure Example
+
+```
+my-project/
+├── golib/              # Project-local libraries
+│   ├── utils.lisp
+│   └── helpers.lisp
+├── main.lisp           # Entry point: (load "utils.lisp")
+└── tests/
+    └── test-main.lisp  ; Can also (load "utils.lisp")
+```
+
+---
+
 ## 🛠️ Language Reference
 
 ### Special Forms
@@ -307,7 +358,7 @@ results  ; => (42 123 13)
 | **Comparison** | `=`, `<`, `>`, `>=`, `<=`, `equal?` |
 | **Lists** | `car`, `cdr`, `cons`, `list`, `atom`, `null`, `apply`, `mapcar` |
 | **Strings** | `string-length`, `string-append`, `substring`, `string-upcase`, `string-downcase`, `string->number`, `number->string` |
-| **I/O** | `print`, `println`, `read`, `load` |
+| **I/O** | `print`, `println`, `read`, `load` (with search path) |
 | **Files** | `file-write`, `file-append`, `file-read`, `file-exists?`, `file-delete` |
 | **Concurrency** | `chan-make`, `chan-send`, `chan-recv`, `lock-make` |
 | **AI** | `sigo`, `sigo-models`, `sigo-host` |

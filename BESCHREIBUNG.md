@@ -125,7 +125,7 @@ ergebnis                             ; → Liste der Ergebnisse
 '(a b c)                             ; Kurzform für quote
 
 (eval '(+ 1 2))                      ; Ausdruck auswerten → 3
-(load "datei.lisp")                  ; Datei laden und ausführen
+(load "datei.lisp")                  ; Datei laden (mit Suchpfad, siehe unten)
 (gensym)                             ; eindeutiges Symbol erzeugen
 ```
 
@@ -194,6 +194,45 @@ ergebnis                             ; → Liste der Ergebnisse
 (file-read    "datei.txt")           ; Datei lesen → String
 (file-exists? "datei.txt")           ; → t oder ()
 (file-delete  "datei.txt")           ; Datei löschen
+```
+
+### Bibliothek-Suchpfad
+
+Die Funktion `load` durchsucht eine definierte Liste von Pfaden, ähnlich wie Python's `sys.path` oder der Shell's `PATH`:
+
+```lisp
+(load "utils.lisp")                  ; Sucht in mehreren Verzeichnissen
+```
+
+**Suchreihenfolge:**
+
+1. **Wie angegeben** — Aktuelles Verzeichnis oder absoluter/relativer Pfad
+2. **`/lib/golib`** — Systemweite Bibliotheken
+3. **`/usr/local/lib/golib`** — Lokale Systembibliotheken
+4. **`./golib`** — Projektlokale Bibliotheken
+5. **`GOLISP_PATH`** — Benutzerdefinierte Pfade (doppelpunkt-getrennt)
+
+**Beispiele:**
+
+```lisp
+; Aus aktuellem Verzeichnis laden (rückwärtskompatibel)
+(load "meinskript.lisp")
+
+; Aus ./golib/ Unterverzeichnis laden
+; (sucht ./golib/utils.lisp)
+(load "utils.lisp")
+
+; Absolute Pfade funktionieren wie immer
+(load "/home/user/lib/stdlib.lisp")
+```
+
+**Umgebungsvariable:**
+
+```bash
+# Benutzerdefinierte Bibliotheksverzeichnisse hinzufügen
+export GOLISP_PATH=/opt/golisp:/home/user/mylisp
+
+./golisp -e '(load "mylib.lisp")'  ; Durchsucht auch GOLISP_PATH
 ```
 
 ### KI (sigoREST)
