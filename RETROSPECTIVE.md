@@ -333,3 +333,129 @@ Die Codebasis bleibt sauber, die Sprache wird benutzerfreundlicher.
 # Session 4 – Unix-Style CLI
 
 Siehe [`docs/retrospectives/2026-02-25-unix-cli.md`](docs/retrospectives/2026-02-25-unix-cli.md)
+
+---
+---
+
+# Session 5 – GoLisp Server (golispd)
+
+**Datum:** 1. März 2026
+**Autoren:** Gerhard Quell & Claude Sonnet 4.6
+
+---
+
+## Was haben wir gebaut?
+
+Ein vollständiger Client-Server-Stack für professionelle Lisp-Entwicklung:
+
+| Feature | Dateien | Commits |
+|---------|---------|---------|
+| TCP-Server (`golispd`) | `cmd/golispd/main.go`, `lib/swank/server.go` | 1 |
+| Protokoll-Handler | `lib/swank/protocol.go` | 1 |
+| CLI-Client (`golisp-client`) | `cmd/golisp-client/main.go` | 1 |
+| Hilfsfunktionen | `lib/types_helpers.go` | 1 |
+| Dokumentation | `CLAUDE.md`, `docs/retrospective-golispd-20250301.md` | 2 |
+
+**Gesamt:** 5 neue Dateien, ~900 Zeilen Go-Code, 6 Commits.
+
+**Vorher:** Nur eingebetteter REPL (`./golisp -i`).
+**Nachher:** Vollständiger Server mit TCP-RPC, persistenter Umgebung, IDE-fähigem Autocomplete.
+
+---
+
+## Was lief gut?
+
+### Architektur-Entscheidungen
+
+**S-Expression-RPC statt JSON**
+- Natürliche Passung zu Lisp – kein zusätzlicher Parser nötig
+- Menschenlesbare Protokoll-Messages für Debugging
+- Der vorhandene `lib.Read()` Parser wiederverwendet
+
+**Geteiltes Environment**
+- Alle Clients sehen denselben Zustand → einfache Kollaboration
+- `define` und `defun` persistieren zwischen Verbindungen
+- Keine komplexe Session-Verwaltung nötig
+
+**Klare Trennung der Verantwortlichkeiten**
+- `server.go`: Netzwerk, Connection Handling
+- `protocol.go`: Business Logic, Methoden-Implementierung
+- `main.go` (beide): CLI, Flag-Handling
+
+### Implementation
+
+**Wiederverwendung bestehender Code**
+- `lib.Read()`, `lib.Eval()`, `env.Symbols()` – alles vorhanden
+- Nur Protokoll-Wrapper und Client-Logik neu geschrieben
+
+**Schnelle Iteration**
+- Sofortiges Testen via `echo ... | nc localhost 4321`
+- Go's schnelle Compile-Zeiten ermöglichten rapid prototyping
+
+---
+
+## Was war herausfordernd?
+
+### Multiline-Handling im Client
+
+**Problem:** Newlines in Code-Strings brechen das S-Expression-Format.
+
+**Lösung:** Escaping von `\n` zu `\\n` im Client – der vorhandene Reader handhabt das korrekt.
+
+**Lesson Learned:** Protokoll-Design muss Whitespace berücksichtigen.
+
+### Autocomplete für Spezialformen
+
+**Problem:** `define`, `defun`, `if` etc. sind keine Environment-Symbole.
+
+**Lösung:** Dokumentation klarstellt – Autocomplete zeigt nur gebundene Symbole.
+
+---
+
+## Technische Erkenntnisse
+
+### S-Expression-RPC Format
+
+```lisp
+;; Request
+(:id 1 :method "eval" :params ("(+ 1 2)"))
+
+;; Response
+(:id 1 :status "ok" :result "3")
+;; oder
+(:id 1 :status "error" :error "unbekanntes Symbol")
+```
+
+Property-Listen als natürliches Format für Lisp-Systeme.
+
+### Goroutines pro Connection
+
+Einfache Konkurrenz ohne manuelle Thread-Verwaltung:
+```go
+for server.running {
+    conn, _ := listener.Accept()
+    go handleConnection(conn)  // Jede Connection eigene Goroutine
+}
+```
+
+---
+
+## Fazit Session 5
+
+GoLisp ist nun bereit für professionelle Entwicklung:
+- Server-Mode für IDE-Integration (Autocomplete, Hover-Doku)
+- Persistente Umgebung für langlaufende Sessions
+- Client-REPL mit Multiline-Support
+
+Der Server macht GoLisp von einem Spielzeug zu einem Werkzeug.
+
+> "Ein Lisp ohne Server ist wie ein Klavier ohne Konzertsaal –
+>  es funktioniert, aber niemand hört es."
+> — Gerhard & Claude, März 2026
+
+---
+---
+
+# Session 4 – Unix-Style CLI
+
+Siehe [`docs/retrospectives/2026-02-25-unix-cli.md`](docs/retrospectives/2026-02-25-unix-cli.md)

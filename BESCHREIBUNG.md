@@ -266,6 +266,52 @@ go run . -t           # Testmodus
 
 ---
 
+## Server-Modus (golispd)
+
+GoLisp kann als SWANK-ähnlicher TCP-Server laufen:
+
+### Server starten
+
+```bash
+golispd --port 4321        # Default: localhost:4321
+golispd --host 0.0.0.0     # Externe Verbindungen erlauben
+```
+
+Umgebungsvariablen: `GOLISP_HOST`, `GOLISP_PORT`
+
+### Client verwenden
+
+```bash
+# Expression auswerten
+golisp-client --eval "(+ 1 2 3)"
+
+# Autocomplete
+golisp-client --complete "def"
+
+# Datei laden
+golisp-client --load skript.lisp
+
+# Interaktiver REPL
+golisp-client --repl
+```
+
+### REPL-Kommandos
+
+| Kommando | Beschreibung |
+|----------|-------------|
+| `:quit`, `:q` | REPL beenden |
+| `:complete pre` | Autocomplete für Prefix |
+| `:load datei` | Datei laden |
+
+### Protokoll (S-Expression-RPC)
+
+**Request:** `(:id 1 :method "eval" :params ("(+ 1 2)"))`
+**Response:** `(:id 1 :status "ok" :result "3")`
+
+Alle Clients teilen sich dasselbe Environment (Zustand bleibt erhalten).
+
+---
+
 ## Das selbsterweiternde Muster
 
 ```lisp

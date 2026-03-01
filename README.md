@@ -66,6 +66,12 @@ GoLisp is a modern Lisp interpreter built in Go, featuring **tail-call optimizat
 - **Multi-line input**: Automatic indentation for incomplete expressions
 - **Full UTF-8 support**: Unicode strings throughout
 
+### Server Mode (golispd)
+- **SWANK-like TCP Server**: S-Expression-RPC for IDE integration
+- **Persistent environment**: Shared state across client connections
+- **Protocol methods**: `eval`, `complete`, `symbols`, `describe`, `load-file`, `ping`
+- **Client REPL**: Interactive REPL via `golisp-client --repl`
+
 ---
 
 ## 🚀 Quick Start
@@ -109,6 +115,41 @@ cat <<'EOF' | ./golisp
 EOF
 # => 25
 ```
+
+### Server Mode (`golispd` + `golisp-client`)
+
+GoLisp can run as a TCP server with a SWANK-like S-Expression-RPC protocol:
+
+```bash
+# Terminal 1: Start the server
+golispd --port 4321
+# => golispd läuft auf localhost:4321
+
+# Terminal 2: Use the client
+golisp-client --port 4321 --eval "(+ 1 2 3)"
+# => 6
+
+golisp-client --port 4321 --complete "def"
+# => ((define . "Define variable") (defun . "Lambda/Closure") ...)
+
+# Interactive REPL via server
+golisp-client --port 4321 --repl
+golisp> (defun square (x) (* x x))
+=> square
+golisp> (square 5)
+=> 25
+golisp> :quit
+```
+
+**Server Features:**
+- Shared environment across all client connections
+- Autocomplete for IDE integration
+- Multiline expression support in REPL
+- S-Expression-RPC protocol (localhost:4321 default)
+
+**Environment Variables:**
+- `GOLISP_HOST` - Server bind address (default: localhost)
+- `GOLISP_PORT` - Server port (default: 4321)
 
 ### REPL
 

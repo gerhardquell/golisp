@@ -66,6 +66,12 @@ GoLisp 是一个用 Go 语言实现的现代 Lisp 解释器，集成了原生 AI
 - **多行输入**：不完整表达式自动缩进
 - **完整 UTF-8 支持**：全 Unicode 字符串支持
 
+### 服务器模式 (golispd)
+- **SWANK 风格 TCP 服务器**：S-表达式 RPC 协议，支持 IDE 集成
+- **持久化环境**：客户端连接间共享状态
+- **协议方法**：`eval`、`complete`、`symbols`、`describe`、`load-file`、`ping`
+- **客户端 REPL**：通过 `golisp-client --repl` 使用交互式 REPL
+
 ---
 
 ## 🚀 快速开始
@@ -109,6 +115,41 @@ cat <<'EOF' | ./golisp
 EOF
 # => 25
 ```
+
+### 服务器模式 (`golispd` + `golisp-client`)
+
+GoLisp 可以作为 TCP 服务器运行，支持类似 SWANK 的 S-表达式 RPC 协议：
+
+```bash
+# 终端 1：启动服务器
+golispd --port 4321
+# => golispd 运行在 localhost:4321
+
+# 终端 2：使用客户端
+golisp-client --port 4321 --eval "(+ 1 2 3)"
+# => 6
+
+golisp-client --port 4321 --complete "def"
+# => ((define . "Define variable") (defun . "Lambda/Closure") ...)
+
+# 通过服务器使用交互式 REPL
+golisp-client --port 4321 --repl
+golisp> (defun square (x) (* x x))
+=> square
+golisp> (square 5)
+=> 25
+golisp> :quit
+```
+
+**服务器特性：**
+- 所有客户端连接共享同一环境
+- 支持 IDE 集成的自动补全
+- REPL 支持多行表达式
+- S-表达式 RPC 协议（默认 localhost:4321）
+
+**环境变量：**
+- `GOLISP_HOST` - 服务器绑定地址（默认：localhost）
+- `GOLISP_PORT` - 服务器端口（默认：4321）
 
 ### REPL 交互环境
 

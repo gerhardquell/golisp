@@ -129,6 +129,19 @@ go build .
 ./golisp -e "(+ 1 2 3)"
 ```
 
+### 服务器模式
+
+GoLisp 还可以作为 TCP 服务器运行，支持 IDE 集成：
+
+```bash
+# 终端 1：启动服务器
+golispd --port 4321
+
+# 终端 2：使用客户端
+golisp-client --port 4321 --eval "(+ 1 2 3)"
+golisp-client --port 4321 --repl
+```
+
 ---
 
 ## 联系与社区
