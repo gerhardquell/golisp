@@ -16,8 +16,14 @@ als eingebaute Lisp-Primitiven beherrscht.
 ```
 golisp/
   main.go              Unix-Style CLI: stdin/-i/-e/-t/Datei + Exit-Codes
+  cmd/
+    golispd/           Server-Binary
+      main.go          TCP-Server Entry Point
+    golisp-client/     Client-Binary
+      main.go          CLI-Client mit REPL
   lib/
     types.go           Cell-Datenstruktur (LispType, Cons, MakeAtom...)
+    types_helpers.go   Hilfsfunktionen: SliceToCell, Append, CellToSlice
     reader.go          Parser: String → Cell-Baum (NewReader, Read)
     env.go             Umgebung: Get, Set, Update, Symbols (verkettete Scopes)
     eval.go            Herzstück: Eval, Spezialformen, defmacro, parfunc
@@ -28,6 +34,9 @@ golisp/
     sigorest.go        sigo, sigo-models, sigo-host (HTTP zu sigoREST)
     readline.go        REPL: go-prompt, Syntax-Highlighting, History, Multiline
     env_test.go        Go-Tests für Env.Symbols()
+    swank/             SWANK-ähnlicher Server
+      server.go        TCP-Listener, Connection Handling
+      protocol.go      Request Routing, Method Handlers
 ```
 
 ---
@@ -161,6 +170,108 @@ EOF
 
 ---
 
+## GoLisp Server (golispd) – SWANK-ähnlicher TCP-Server
+
+GoLisp kann als Server laufen, der via TCP S-Expression-RPC mit Clients kommuniziert – ähnlich wie SWANK für Common Lisp.
+
+### Architektur
+```
+┌─────────────┐     TCP Socket      ┌─────────────┐
+│   Client    │ ◄─────────────────► │  golispd    │
+│  (Emacs,    │   S-Expression RPC  │   (Server)  │
+│   VS Code,  │                     └──────┬──────┘
+│   CLI)      │                            │
+└─────────────┘                     ┌──────┴──────┐
+                                    │  GoLisp     │
+                                    │  Runtime    │
+                                    └─────────────┘
+```
+
+### Server starten
+
+```bash
+# Default (localhost:4321)
+golispd
+
+# Custom port
+golispd --port 5000
+
+# Umgebungsvariablen
+export GOLISP_HOST=0.0.0.0
+export GOLISP_PORT=5000
+golispd
+```
+
+### Client-Befehle
+
+```bash
+# Ping (Health-Check)
+golisp-client --ping
+
+# Expression auswerten
+golisp-client --eval "(+ 1 2 3)"
+# => 6
+
+# Autocomplete
+golisp-client --complete "ca"
+# => ((car . "Eingebaute Funktion") (cadr . "Lambda/Closure") ...)
+
+# Datei laden
+golisp-client --load myscript.lisp
+
+# Interaktiver REPL
+golisp-client --repl
+golisp> (defun square (x) (* x x))
+golisp> (square 5)
+25
+golisp> :quit
+```
+
+### Protokoll (S-Expression-RPC)
+
+**Request:**
+```lisp
+(:id 1 :method "eval" :params ("(+ 1 2)"))
+(:id 2 :method "complete" :params ("def"))
+(:id 3 :method "symbols" :params ())
+```
+
+**Response:**
+```lisp
+(:id 1 :status "ok" :result "3")
+(:id 2 :status "ok" :result (("defun" . "Lambda/Closure")))
+(:id 3 :status "error" :error "unbekanntes Symbol 'x'")
+```
+
+### Unterstützte Methoden
+
+| Methode | Beschreibung | Beispiel |
+|---------|--------------|----------|
+| `ping` | Health-Check | `()` → `"pong"` |
+| `eval` | Code auswerten (String) | `("(+ 1 2)")` → `"3"` |
+| `eval-return` | Code auswerten (Cell) | `("(list 1 2)")` → `(1 2)` |
+| `complete` | Autocomplete | `("ca")` → Symbole mit Prefix |
+| `symbols` | Alle Symbole listen | `()` → Liste aller Namen |
+| `describe` | Dokumentation | `("car")` → Doc-String |
+| `load-file` | Datei laden | `("script.lisp")` → Status |
+| `disconnect` | Verbindung schließen | `()` → `()` |
+
+### REPL-Modus Features
+
+- **Multiline:** Automatische Fortsetzung bei offenen Klammern
+- **Kommandos:** `:quit`, `:complete prefix`, `:load datei`
+- **Error Recovery:** Fehler brechen REPL nicht ab
+- **Shared Environment:** Alle Clients teilen denselben Zustand
+
+### Installation
+
+```bash
+go build -o /usr/local/bin/golispd ./cmd/golispd/
+go build -o /usr/local/bin/golisp-client ./cmd/golisp-client/
+```
+
+---
+
 ## sigoREST Anbindung
 
 GoLisp spricht mit dem sigoREST-Server:
@@ -203,7 +314,7 @@ Für sequenzielle Calls mit Pausen:
 (define zai      "http://zai:9080")
 
 (parfunc sechs-huete
-  (sigo "Fakten..." "claude-h" "" mammouth)   ; ⚪ Weiß
+  (sigo "Fakten..." "claude-h" "" mammouth)  ; ⚪ Weiß
   (sigo "Gefühl..." "gemini-p" "" moonshot)  ; 🔴 Rot
   (sigo "Risiken..." "gpt41" "" zai)         ; ⚫ Schwarz
   (sigo "Chancen..." "claude-h" "" mammouth) ; 🟡 Gelb
@@ -371,15 +482,25 @@ Der Vergleich erfolgt mit `equal?` (strukturelle Gleichheit).
 ## Build & Test
 
 ```bash
-go build .                              # kompilieren
+go build .                              # kompilieren (golisp)
+go build ./cmd/golispd/                 # Server kompilieren
+go build ./cmd/golisp-client/           # Client kompilieren
 go test ./...                           # Go-Unit-Tests
 
-# CLI-Modi
+# Installation
+sudo cp golisp golispd golisp-client /usr/local/bin/
+
+# CLI-Modi (golisp Hauptbinary)
 go run . -t                             # Testmodus (26 Tests)
 go run . -i                             # Interaktiver REPL (benötigt TTY)
 go run . -e "(+ 1 2)"                   # Expression direkt ausführen
 go run . skript.lisp                    # Datei ausführen
 echo "(+ 1 2)" | go run .              # Stdin-Modus (Default)
+
+# Server/Client-Modus
+golispd --port 4321                     # Server starten
+golisp-client --eval "(+ 1 2)"          # Client: Expression
+golisp-client --repl                    # Client: Interaktiver REPL
 
 # Exit-Codes: 0 = Erfolg, 1 = Fehler
 echo "(+ 1 2)" | ./golisp; echo $?      # → 0
