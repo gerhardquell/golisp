@@ -1,5 +1,7 @@
-# Go binary
+# Go binaries
 golisp
+golispd
+golisp-client
 
 # Build artifacts
 *.test
