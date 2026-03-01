@@ -11,3 +11,6 @@
 go.work
 go.work.sum
 .worktrees/
+
+# Local binaries (installed to /usr/local/bin)
+bin/
