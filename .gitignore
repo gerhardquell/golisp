@@ -14,3 +14,10 @@ go.work.sum
 
 # Local binaries (installed to /usr/local/bin)
 bin/
+
+# Backup files
+*.backup
+*.bak
+*.swp
+*~
+*.tmp
