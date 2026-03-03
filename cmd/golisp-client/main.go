@@ -161,9 +161,27 @@ func extractResult(response string) string {
 	// Wenn es mit " beginnt, ist es ein String
 	if strings.HasPrefix(remaining, "\"") {
 		remaining = remaining[1:]
-		end := strings.Index(remaining, "\"")
-		if end != -1 {
-			return remaining[:end]
+		// Suche nach unescaped " - berücksichtige \"
+		inEscape := false
+		for i, ch := range remaining {
+			if inEscape {
+				inEscape = false
+				continue
+			}
+			if ch == '\\' {
+				inEscape = true
+				continue
+			}
+			if ch == '"' {
+				// Gefunden - unescaped Quote
+				unescaped := remaining[:i]
+				// Konvertiere \n zu echten Newlines für bessere Lesbarkeit
+				unescaped = strings.ReplaceAll(unescaped, "\\n", "\n")
+				unescaped = strings.ReplaceAll(unescaped, "\\t", "\t")
+				unescaped = strings.ReplaceAll(unescaped, "\\\"", "\"")
+				unescaped = strings.ReplaceAll(unescaped, "\\\\", "\\")
+				return unescaped
+			}
 		}
 	}
 

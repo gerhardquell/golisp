@@ -74,7 +74,14 @@ func handleEval(params *lib.Cell, env *lib.Env) (*lib.Cell, error) {
 	}
 
 	// Ergebnis als String zurückgeben
-	return lib.MakeString(result.String()), nil
+	// Für Strings: Val verwenden (nicht String() mit Quotes)
+	var resultStr string
+	if result.Type == lib.STRING {
+		resultStr = result.Val
+	} else {
+		resultStr = result.String()
+	}
+	return lib.MakeString(resultStr), nil
 }
 
 // handleEvalReturn: Lisp-Code auswerten, Ergebnis als Cell-Struktur

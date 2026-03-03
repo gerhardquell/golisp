@@ -282,6 +282,10 @@ func formatResponse(id int, status, err string, result *lib.Cell) string {
 	if result == nil {
 		result = lib.MakeNil()
 	}
+	// Strings escapen um Multiline-Antworten zu unterstützen
+	if result.Type == lib.STRING {
+		return fmt.Sprintf("(:id %d :status \"%s\" :result \"%s\")", id, status, escapeString(result.Val))
+	}
 	return fmt.Sprintf("(:id %d :status \"%s\" :result %s)", id, status, result.String())
 }
 
@@ -290,10 +294,11 @@ func (s *Server) makeErrorResponse(id int, msg string) string {
 	return formatResponse(id, "error", msg, nil)
 }
 
-// escapeString escaped Anführungszeichen in Strings
+// escapeString escaped Newlines in Strings (aber nicht Quotes - die sind im Format-String)
 func escapeString(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
-	s = strings.ReplaceAll(s, "\"", "\\\"")
 	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\t", "\\t")
+	// Quotes werden NICHT escapet - sie sind bereits durch Format-String "..." geschützt
 	return s
 }
