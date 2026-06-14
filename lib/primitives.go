@@ -10,6 +10,8 @@ package lib
 
 import (
   "fmt"
+  "math"
+  "math/rand"
   "runtime"
   "sync/atomic"
   "time"
@@ -20,10 +22,14 @@ func BaseEnv() *Env {
   env := NewEnv(nil)
 
   // Arithmetik
-  env.Set("+",   makeFn(fnAdd))
-  env.Set("-",   makeFn(fnSub))
-  env.Set("*",   makeFn(fnMul))
-  env.Set("/",   makeFn(fnDiv))
+  env.Set("+",         makeFn(fnAdd))
+  env.Set("-",         makeFn(fnSub))
+  env.Set("*",         makeFn(fnMul))
+  env.Set("/",         makeFn(fnDiv))
+  env.Set("mod",       makeFn(fnMod))
+  env.Set("remainder", makeFn(fnMod))
+  env.Set("abs",       makeFn(fnAbs))
+  env.Set("random",    makeFn(fnRandom))
 
   // Vergleiche
   env.Set("=",   makeFn(fnEq))
@@ -85,6 +91,9 @@ func BaseEnv() *Env {
 
   // Datei-I/O
   RegisterFileIO(env)
+
+  // Shell-Kommandos
+  RegisterShellCmd(env)
 
   // String-Funktionen
   RegisterStringFuncs(env)
@@ -175,6 +184,27 @@ func fnEqPtr(args []*Cell) (*Cell, error) {
     return MakeAtom("t"), nil
   }
   return MakeNil(), nil
+}
+
+func fnRandom(args []*Cell) (*Cell, error) {
+  if len(args) == 0 {
+    return MakeNum(float64(rand.Int())), nil
+  }
+  n := int(args[0].Num)
+  if n <= 0 { return nil, fmt.Errorf("random: positive Zahl erwartet") }
+  return MakeNum(float64(rand.Intn(n))), nil
+}
+
+func fnMod(args []*Cell) (*Cell, error) {
+  if len(args) < 2 { return nil, fmt.Errorf("mod: 2 Argumente nötig") }
+  b := args[1].Num
+  if b == 0 { return nil, fmt.Errorf("mod: Division durch Null") }
+  return MakeNum(math.Mod(args[0].Num, b)), nil
+}
+
+func fnAbs(args []*Cell) (*Cell, error) {
+  if len(args) < 1 { return nil, fmt.Errorf("abs: 1 Argument nötig") }
+  return MakeNum(math.Abs(args[0].Num)), nil
 }
 
 // cellEqual: struktureller Vergleich zweier Cells (rekursiv)

@@ -12,7 +12,7 @@ import (
   "fmt"
   "os"
   "strings"
-  "sync"
+  "time"
 )
 
 var librarySearchPaths []string
@@ -585,55 +585,85 @@ func evalDefmacro(args *Cell, env *Env) (*Cell, error) {
   return MakeAtom(name), nil
 }
 
-// parfunc: (parfunc ergebnis expr1 expr2 ...)
-// Wertet alle Ausdrücke parallel aus, sammelt Ergebnisse als Liste
+// parfunc: (parfunc ergebnis [:timeout N] expr1 expr2 ...)
+// Wertet alle Ausdrücke parallel aus, sammelt Ergebnisse als Liste.
+// Optionaler :timeout N (Sekunden): bei Ablauf liefert die Goroutine nil.
 func evalParfunc(args *Cell, env *Env) (*Cell, error) {
   if args == nil || args.Type != LIST {
-    return nil, fmt.Errorf("parfunc: Syntax: (parfunc name expr...)")
+    return nil, fmt.Errorf("parfunc: Syntax: (parfunc name [:timeout N] expr...)")
   }
 
   // erstes Argument: Name für die Ergebnisliste
   resultName := args.Car.Val
-  exprs      := args.Cdr
+  rest       := args.Cdr
+
+  // optionalen :timeout N Parameter lesen
+  timeout := time.Duration(0)
+  if rest != nil && rest.Type == LIST &&
+     rest.Car != nil && rest.Car.Val == ":timeout" &&
+     rest.Cdr != nil && rest.Cdr.Type == LIST {
+    timeout = time.Duration(rest.Cdr.Car.Num) * time.Second
+    rest = rest.Cdr.Cdr
+  }
 
   // Ausdrücke sammeln
   var exprList []*Cell
-  for e := exprs; e != nil && e.Type == LIST; e = e.Cdr {
+  for e := rest; e != nil && e.Type == LIST; e = e.Cdr {
     exprList = append(exprList, e.Car)
   }
   if len(exprList) == 0 { return MakeNil(), nil }
 
-  // Parallel auswerten
-  results := make([]*Cell, len(exprList))
-  errors  := make([]error,  len(exprList))
-  var wg sync.WaitGroup
+  // Parallel auswerten — jede Goroutine sendet ihr Ergebnis in einen Channel
+  type parfuncResult struct {
+    idx int
+    val *Cell
+  }
+  ch := make(chan parfuncResult, len(exprList))
 
   for i, expr := range exprList {
-    wg.Add(1)
     go func(idx int, e *Cell) {
-      defer wg.Done()
-      // jede Goroutine bekommt eigene Env-Kopie (read-only reicht hier)
-      results[idx], errors[idx] = Eval(e, env)
+      val, err := Eval(e, env)
+      if err != nil { val = MakeNil() }
+      ch <- parfuncResult{idx, val}
     }(i, expr)
   }
-  wg.Wait()
 
-  // Fehler prüfen
-  for i, err := range errors {
-    if err != nil {
-      return nil, fmt.Errorf("parfunc[%d]: %v", i, err)
+  // Ergebnisse einsammeln — mit oder ohne Timeout
+  gathered := make([]*Cell, len(exprList))
+  for i := range gathered { gathered[i] = MakeNil() } // Default: nil
+
+  var timer <-chan time.Time
+  if timeout > 0 {
+    timer = time.After(timeout)
+  }
+
+  collected := 0
+  for collected < len(exprList) {
+    if timer != nil {
+      select {
+      case r := <-ch:
+        gathered[r.idx] = r.val
+        collected++
+      case <-timer:
+        // Timeout: restliche Goroutinen laufen weiter, Ergebnisse werden nil
+        collected = len(exprList)
+      }
+    } else {
+      r := <-ch
+      gathered[r.idx] = r.val
+      collected++
     }
   }
 
   // Ergebnisse als Lisp-Liste aufbauen
-  result := MakeNil()
-  for i := len(results) - 1; i >= 0; i-- {
-    result = Cons(results[i], result)
+  listResult := MakeNil()
+  for i := len(gathered) - 1; i >= 0; i-- {
+    listResult = Cons(gathered[i], listResult)
   }
 
   // In env speichern
-  env.Set(resultName, result)
-  return result, nil
+  env.Set(resultName, listResult)
+  return listResult, nil
 }
 
 // lock: (lock mu expr1 expr2 ...) → atomar ausführen
@@ -918,15 +948,15 @@ func evalCatch(args *Cell, env *Env) (*Cell, error) {
     return result, nil  // kein Fehler → normal zurückgeben
   }
 
-  // Nur LispError abfangen; Go-interne Fehler durchreichen
+  // Alle Fehler abfangen (LispError + Go-Primitive-Fehler)
   lispErr, ok := err.(*LispError)
   if !ok {
-    return nil, err
+    lispErr = &LispError{Msg: MakeStr(err.Error())}
   }
 
   // Handler auswerten und mit Fehler-Cell aufrufen
-  handler, err := Eval(args.Cdr.Car, env)
-  if err != nil { return nil, err }
+  handler, herr := Eval(args.Cdr.Car, env)
+  if herr != nil { return nil, herr }
   return apply(handler, []*Cell{lispErr.Msg})
 }
 

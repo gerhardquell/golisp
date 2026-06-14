@@ -10,6 +10,7 @@ package lib
 
 import (
   "bytes"
+  "context"
   "encoding/json"
   "fmt"
   "io"
@@ -21,7 +22,7 @@ import (
 
 var (
   sigoHost    = "http://127.0.0.1:9080"
-  sigoTimeout = 60 * time.Second
+  sigoTimeout = 30 * time.Second
   // Rate-Limiting: max 1 Request pro 2 Sekunden pro Model
   sigoRateLimiter = time.Tick(2 * time.Second)
   // Circuit-Breaker Schutz
@@ -118,12 +119,18 @@ func sigoCallToHost(prompt, model, sessionID, host string) (string, error) {
   data, err := json.Marshal(reqBody)
   if err != nil { return "", fmt.Errorf("sigo marshal: %v", err) }
 
-  client := &http.Client{Timeout: sigoTimeout}
-  resp, err := client.Post(
+  ctx, cancel := context.WithTimeout(context.Background(), sigoTimeout)
+  defer cancel()
+
+  req, err := http.NewRequestWithContext(ctx, "POST",
     host+"/v1/chat/completions",
-    "application/json",
     bytes.NewReader(data),
   )
+  if err != nil { return "", fmt.Errorf("sigo request: %v", err) }
+  req.Header.Set("Content-Type", "application/json")
+
+  client := &http.Client{}
+  resp, err := client.Do(req)
   if err != nil { return "", fmt.Errorf("sigo connect: %v", err) }
   defer resp.Body.Close()
 

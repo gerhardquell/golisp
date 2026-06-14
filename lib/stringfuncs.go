@@ -28,6 +28,36 @@ func RegisterStringFuncs(env *Env) {
   env.Set("number->string",  makeFn(fnNumberToString))
   env.Set("string->list",    makeFn(fnStringToList))
   env.Set("list->string",    makeFn(fnListToString))
+  env.Set("string-replace",  makeFn(fnStringReplace))
+  env.Set("string-trim",     makeFn(fnStringTrim))
+  env.Set("string-contains", makeFn(fnStringContains))
+}
+
+// string-replace: (string-replace str old new) → str mit allen Ersetzungen
+func fnStringReplace(args []*Cell) (*Cell, error) {
+  if len(args) < 3 {
+    return nil, fmt.Errorf("string-replace: 3 Argumente nötig")
+  }
+  return MakeStr(strings.ReplaceAll(args[0].Val, args[1].Val, args[2].Val)), nil
+}
+
+// string-trim: (string-trim str) → str ohne führende/abschließende Whitespace
+func fnStringTrim(args []*Cell) (*Cell, error) {
+  if len(args) < 1 {
+    return nil, fmt.Errorf("string-trim: 1 Argument nötig")
+  }
+  return MakeStr(strings.TrimSpace(args[0].Val)), nil
+}
+
+// string-contains: (string-contains str sub) → t oder nil
+func fnStringContains(args []*Cell) (*Cell, error) {
+  if len(args) < 2 {
+    return nil, fmt.Errorf("string-contains: 2 Argumente nötig")
+  }
+  if strings.Contains(args[0].Val, args[1].Val) {
+    return MakeAtom("t"), nil
+  }
+  return MakeNil(), nil
 }
 
 func fnStringLength(args []*Cell) (*Cell, error) {
