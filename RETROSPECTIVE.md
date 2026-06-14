@@ -459,3 +459,148 @@ Der Server macht GoLisp von einem Spielzeug zu einem Werkzeug.
 # Session 4 – Unix-Style CLI
 
 Siehe [`docs/retrospectives/2026-02-25-unix-cli.md`](docs/retrospectives/2026-02-25-unix-cli.md)
+
+---
+---
+
+# Session 6 – 2026-06-14
+
+**Autoren:** Gerhard Quell & Claude Sonnet 4.6
+
+---
+
+## Was haben wir gebaut?
+
+| Feature | Dateien | Beschreibung |
+|---------|---------|--------------|
+| `parfunc :timeout N` | `eval.go` | Optionaler Timeout für parallele Auswertung |
+| Channel-basiertes parfunc | `eval.go` | `sync.WaitGroup` → Channel, feinere Kontrolle |
+| `catch` verbessert | `eval.go` | Fängt jetzt alle Fehler ab, nicht nur `LispError` |
+| `mod`, `remainder`, `abs` | `primitives.go` | Arithmetik-Primitiven |
+| `random` | `primitives.go` | Zufallszahlen mit/ohne Limit |
+| `string-replace`, `string-trim`, `string-contains` | `stringfuncs.go` | String-Primitiven |
+| `system` | `shellcmd.go` (neu) | Shell-Kommando ausführen, Exit-Code zurück |
+| `file-stat` | `shellcmd.go` (neu) | Datei-Metadaten als Assoziationsliste |
+| `assoc` | `shellcmd.go` (neu) | Assoziationslisten-Suche mit `equal?` |
+| `symbol->string` | `shellcmd.go` (neu) | Symbol in String konvertieren |
+| sigoREST context.Timeout | `sigorest.go` | `http.Client.Timeout` → `context.WithTimeout` |
+| sigoREST-Timeout 60→30s | `sigorest.go` | Realistischerer Default |
+
+**Gesamt:** 12 Features/Fixes, 2 Commits golisp + 1 Commit sigoREST, 220+ neue Zeilen.
+
+---
+
+## Bug-Analyse: sigoREST `max_tokens:0`
+
+Die interessanteste Arbeit dieser Session war eine Fehlerdiagnose über zwei Projekte.
+
+### Symptom
+```lisp
+(sigo "test" "cl46-s")
+=> Error: eval: sigo HTTP 400
+```
+
+### Erste (falsche) Hypothese
+*Vermutung:* Mammouth liefert Anthropic-Format für neuere Claude-Modelle,
+Engine parst nur OpenAI-Format → "Unexpected response format".
+
+*Fix-Versuch:* `cfg.Type = "anthropic"` basierend auf Model-ID-Prefix.
+
+*Ergebnis:* Fix gebrochen. `"anthropic"`-Type ändert Auth-Header von
+`Authorization: Bearer` auf `x-api-key` — Mammouth lehnt das ab.
+
+### Echte Ursache (nach direktem Mammouth-Test)
+Mammouth gibt für **alle** Modelle OpenAI-Format zurück. Das Problem lag tiefer:
+
+```
+Mammouth /public/models → MaxOutputTokens = 0 für neue Modelle
+                              ↓
+Server: req.MaxTokens == 0 && modelInfo.MaxOutputTokens == 0
+        → max_tokens: 0 im API-Request
+                              ↓
+Mammouth: finish_reason: "length", content: null
+                              ↓
+Engine: null.(string) schlägt fehl → "Unexpected response format"
+```
+
+`cl4-s` (claude-sonnet-4) funktionierte weil es noch in den `CoreModels`
+mit `MaxOutputTokens: 8192` definiert war — alle neueren Modelle kamen
+nur aus der Live-API ohne Token-Limits.
+
+### Fix (2 Stellen in sigoREST)
+1. `main.go`: `max_tokens` nur senden wenn `> 0`
+2. `engine.go`: `content: null` gibt jetzt klare Fehlermeldung statt "Unexpected format"
+
+---
+
+## Was lief gut?
+
+### Direkter API-Test als Debugging-Werkzeug
+`curl` direkt gegen Mammouth (mit dem API-Key aus der Umgebung) hat die
+falsche Hypothese sofort widerlegt. Ohne diesen Test hätte die falsche
+Lösung länger gehalten.
+
+### Cross-Projekt-Navigation
+Das `extern/sigoREST` Symlink-Muster erlaubt, beide Projekte in einer
+Session zu bearbeiten, ohne Repository-Grenzen zu verlieren.
+
+---
+
+## Was lief nicht so gut?
+
+### Erste Hypothese war falsch
+Die "Anthropic-Format vs OpenAI-Format"-Hypothese klang plausibel,
+war aber ungeprüft. Direkter `curl`-Test hätte das früher widerlegt.
+
+**Lesson Learned:** Bei HTTP-Fehlern immer zuerst den API-Endpoint
+direkt testen, bevor Code-Änderungen gemacht werden.
+
+### Language-Server Diagnostiken (wieder)
+LSP meldet Fehler für sigoREST-Dateien weil das Modul nicht im golisp-Workspace ist.
+`go build` bleibt die verlässliche Ground Truth.
+
+---
+
+## Technische Erkenntnisse
+
+### `max_tokens: 0` ist ein semantischer Fehler
+Die meisten LLM-APIs interpretieren `max_tokens: 0` als "0 Tokens generieren",
+nicht als "Provider-Default". Das Feld weglassen ist der korrekte Weg
+für "kein Limit spezifiziert".
+
+### Channel vs WaitGroup für parallele Auswertung
+`sync.WaitGroup` sammelt nur "fertig"-Signale — kein Timeout möglich.
+Channel mit `select` erlaubt Timeout, Early-exit und geordnetes Mapping:
+
+```go
+type parfuncResult struct { idx int; val *Cell }
+ch := make(chan parfuncResult, len(exprList))
+select {
+case r := <-ch: gathered[r.idx] = r.val
+case <-timer:   collected = len(exprList)  // Abbruch
+}
+```
+
+### sigoREST-Modelle sind runtime-dynamisch
+Modelle kommen nicht aus einer statischen CSV, sondern werden beim Start
+live von Provider-APIs abgerufen. Shortcodes ändern sich wenn Provider
+neue Modelle deployen — Dokumentation veraltet schnell.
+
+---
+
+## Offene Punkte
+
+- [ ] `sigorest.go` Default-Modell noch `ollama-gemma3-4b` — nicht mehr verfügbar
+- [ ] `eval.go` hat 1003 Zeilen (CLAUDE.md-Limit: 500) — Aufteilen sinnvoll
+- [ ] `postgres.go` nicht in CLAUDE.md dokumentiert
+
+---
+
+## Fazit Session 6
+
+Eine Session dominiert von Debugging statt Feature-Bau. Wert lag in der
+systematischen Fehleranalyse: falsche Hypothese schnell identifiziert,
+echte Ursache durch direkten API-Test gefunden, Fix sauber in zwei Dateien.
+
+> "Ein Bug der zwei Projekte überspannt, lehrt mehr als zehn Features."
+> — Gerhard & Claude, Juni 2026
