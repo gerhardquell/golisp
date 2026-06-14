@@ -280,8 +280,25 @@ Host: http://127.0.0.1:9080 (Default)
 Endpoint: POST /v1/chat/completions
 ```
 
-Verfügbare Modell-Shortcodes: `claude-h` `gemini-p` `gpt41`
-und alle lokalen Ollama-Modelle (z.B. `ollama-gemma3-4b`)
+Aktuelle Modell-Shortcodes (sigoREST dynamisch via Mammouth/Moonshot/ZAI):
+
+| Shortcode | Modell |
+|-----------|--------|
+| `cl4-s`   | claude-sonnet-4 |
+| `cl45-h`  | claude-haiku-4-5 |
+| `cl45-s`  | claude-sonnet-4-5 |
+| `cl46-s`  | claude-sonnet-4-6 |
+| `cl46-o`  | claude-opus-4-6 |
+| `gem25-f` | gemini-2.5-flash |
+| `gem25-p` | gemini-2.5-pro |
+| `gem35-f` | gemini-3.5-flash |
+| `kimi`    | kimi-k2.5 |
+| `kimik26` | kimi-k2.6 |
+| `ds32`    | deepseek-v3.2 |
+| `gpt41`   | gpt-4.1 |
+| `gpt52`   | gpt-5.2 |
+
+Vollständige Liste: `(sigo-models)`
 
 ### Rate-Limiting & Best Practices
 
@@ -292,9 +309,9 @@ und alle lokalen Ollama-Modelle (z.B. `ollama-gemma3-4b`)
 
 Für sequenzielle Calls mit Pausen:
 ```lisp
-(sigo "Erste Frage" "claude-h")
+(sigo "Erste Frage" "cl46-s")
 (sleep 2000)  ; 2 Sekunden Pause
-(sigo "Zweite Frage" "gemini-p")
+(sigo "Zweite Frage" "gem25-f")
 ```
 
 ### Multi-Server Verteilung (mammouth/moonshot/zai)
@@ -302,9 +319,9 @@ Für sequenzielle Calls mit Pausen:
 `sigo` unterstützt einen optionalen 4. Parameter für den Host:
 ```lisp
 ; Syntax: (sigo "prompt" "model" "session-id" "host")
-(sigo "Hallo" "claude-h" "" "http://mammouth:9080")
-(sigo "Hallo" "gemini-p" "" "http://moonshot:9080")
-(sigo "Hallo" "gpt41" "" "http://zai:9080")
+(sigo "Hallo" "cl46-s"  "" "http://mammouth:9080")
+(sigo "Hallo" "gem25-f" "" "http://moonshot:9080")
+(sigo "Hallo" "gpt41"   "" "http://zai:9080")
 ```
 
 **Anwendung: 6-Hüte-Modell mit Lastverteilung**
@@ -314,12 +331,12 @@ Für sequenzielle Calls mit Pausen:
 (define zai      "http://zai:9080")
 
 (parfunc sechs-huete
-  (sigo "Fakten..." "claude-h" "" mammouth)  ; ⚪ Weiß
-  (sigo "Gefühl..." "gemini-p" "" moonshot)  ; 🔴 Rot
-  (sigo "Risiken..." "gpt41" "" zai)         ; ⚫ Schwarz
-  (sigo "Chancen..." "claude-h" "" mammouth) ; 🟡 Gelb
-  (sigo "Ideen..." "gemini-p" "" moonshot)   ; 🟢 Grün
-  (sigo "Meta..." "gpt41" "" zai))           ; 🔵 Blau
+  (sigo "Fakten..." "cl46-s"  "" mammouth)  ; ⚪ Weiß
+  (sigo "Gefühl..." "gem25-f" "" moonshot)  ; 🔴 Rot
+  (sigo "Risiken..." "gpt41"  "" zai)       ; ⚫ Schwarz
+  (sigo "Chancen..." "cl46-s" "" mammouth)  ; 🟡 Gelb
+  (sigo "Ideen..."  "gem25-f" "" moonshot)  ; 🟢 Grün
+  (sigo "Meta..."   "gpt41"   "" zai))      ; 🔵 Blau
 ```
 
 Ohne Host-Parameter wird der Default-Host (`sigo-host`) verwendet.
@@ -327,13 +344,13 @@ Ohne Host-Parameter wird der Default-Host (`sigo-host`) verwendet.
 ### Das selbsterweiternde Muster
 ```lisp
 ; KI schreibt Code → GoLisp führt ihn aus
-(eval (read (sigo "schreibe (defun fib (n) ...)" "claude-h")))
+(eval (read (sigo "schreibe (defun fib (n) ...)" "cl46-s")))
 (fib 10)
 
 ; Ensemble: 3 KIs parallel
 (parfunc antworten
-  (sigo "problem" "claude-h")
-  (sigo "problem" "gemini-p")
+  (sigo "problem" "cl46-s")
+  (sigo "problem" "gem25-f")
   (sigo "problem" "gpt41"))
 ```
 
