@@ -21,3 +21,10 @@ bin/
 *.swp
 *~
 *.tmp
+
+# TLS-Zertifikate (sigoREST-Certs gehören nach /usr/local/slib/sigoREST/certs/,
+# nie ins Repo. Guard verhindert versehentliches Committen privater Keys.)
+certs/
+*.crt
+*.key
+*.pem

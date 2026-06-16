@@ -1,0 +1,255 @@
+//**********************************************************************
+//  lib/eval_core.go
+//  Autor    : Gerhard Quell - gquell@skequell.de
+//  CoAutor  : claude sonnet 4.6
+//  Copyright: 2026 Gerhard Quell - SKEQuell
+//  Erstellt : 20260616 (aufgespalten aus eval.go)
+//**********************************************************************
+// Herzstück: der Eval-Trampolin-Loop mit TCO.
+// Die Tail-Spezialformen (if, begin, let, let*, cond, case) bleiben hier
+// INLINE – sie setzen expr/env und machen continue im for-Loop. Auslagern
+// würde das Trampolin zerstören (echter Funktionsaufruf statt O(1)-Loop).
+// Nur case delegiert an evalCase (Rückgabe-Tripel) in eval_specialforms.go.
+//**********************************************************************
+
+package lib
+
+import "fmt"
+
+// Eval wertet einen Ausdruck in env aus. Trampolin: Tail-Positionen
+// setzen expr/env und continue'n, statt zu rekursieren – O(1) Stack.
+func Eval(expr *Cell, env *Env) (*Cell, error) {
+  for {
+    if expr == nil { return MakeNil(), nil }
+
+    switch expr.Type {
+    case NIL, NUMBER, STRING, FUNC: return expr, nil
+    case ATOM:
+      if len(expr.Val) > 0 && expr.Val[0] == ':' { return expr, nil } // Keywords selbst-auswertend
+      return env.Get(expr.Val)
+    case LIST:  // handled below
+    default:    return nil, fmt.Errorf("eval: unbekannter Typ")
+    }
+
+    // ── LIST: Spezialformen und Funktionsanwendung ──
+    if expr.Car == nil { return MakeNil(), nil }
+
+    if expr.Car.Type == ATOM {
+      switch expr.Car.Val {
+
+      // ── Nicht-Tail: Ergebnis sofort zurückgeben ──
+      case "quote":        return expr.Cdr.Car, nil
+      case "macroexpand":  return evalMacroexpand(expr.Cdr, env)
+      case "define", "setq":  return evalDefine(expr.Cdr, env)
+      case "defun":        return evalDefun(expr.Cdr, env)
+      case "defmacro":     return evalDefmacro(expr.Cdr, env)
+      case "lambda":       return evalLambda(expr.Cdr, env)
+      case "set!":         return evalSet(expr.Cdr, env)
+      case "setq*":        return evalSetQStar(expr.Cdr, env)
+      case "mapcar":       return evalMapcar(expr.Cdr, env)
+      case "load":         return evalLoad(expr.Cdr, env)
+      case "and":          return evalAnd(expr.Cdr, env)
+      case "or":           return evalOr(expr.Cdr, env)
+      case "not":          return evalNot(expr.Cdr, env)
+      case "parfunc":      return evalParfunc(expr.Cdr, env)
+      case "lock":         return evalLock(expr.Cdr, env)
+      case "eval":         return evalEval(expr.Cdr, env)
+      case "catch":        return evalCatch(expr.Cdr, env)
+      case "while":        return evalWhile(expr.Cdr, env)
+      case "do":           return evalDo(expr.Cdr, env)
+      case "quasiquote":   return evalQuasiquote(expr.Cdr, env)
+      case "function":     return Eval(expr.Cdr.Car, env)
+      case "flet":         return evalFlet(expr.Cdr, env)
+      case "labels":       return evalLabels(expr.Cdr, env)
+      case "block":        return evalBlock(expr.Cdr, env)
+      case "return-from":  return evalReturnFrom(expr.Cdr, env)
+      case "unquote":      return nil, fmt.Errorf("unquote: außerhalb von quasiquote")
+      case "unquote-splice": return nil, fmt.Errorf("unquote-splice: außerhalb von quasiquote")
+
+      // ── Tail: expr/env setzen, Loop weiter ──
+      case "if":
+        cond, err := Eval(expr.Cdr.Car, env)
+        if err != nil { return nil, err }
+        if isTruthy(cond) {
+          expr = expr.Cdr.Cdr.Car
+        } else if expr.Cdr.Cdr != nil && expr.Cdr.Cdr.Cdr != nil && expr.Cdr.Cdr.Cdr.Type == LIST {
+          expr = expr.Cdr.Cdr.Cdr.Car
+        } else {
+          return MakeNil(), nil
+        }
+        continue
+
+      case "begin":
+        args := expr.Cdr
+        for args != nil && args.Cdr != nil && args.Cdr.Type == LIST {
+          if _, err := Eval(args.Car, env); err != nil { return nil, err }
+          args = args.Cdr
+        }
+        if args == nil || args.Type != LIST { return MakeNil(), nil }
+        expr = args.Car
+        continue
+
+      case "let":
+        localEnv := NewEnv(env)
+        bindings := expr.Cdr.Car
+        for bindings != nil && bindings.Type == LIST {
+          b := bindings.Car
+          val, err := Eval(b.Cdr.Car, env)
+          if err != nil { return nil, err }
+          localEnv.Set(b.Car.Val, val)
+          bindings = bindings.Cdr
+        }
+        // Handle multiple body expressions in let
+        body := expr.Cdr.Cdr
+        if body == nil {
+          return MakeNil(), nil
+        }
+        // Evaluate all but the last expression
+        for body.Cdr != nil && body.Cdr.Type == LIST {
+          _, err := Eval(body.Car, localEnv)
+          if err != nil { return nil, err }
+          body = body.Cdr
+        }
+        // Tail call optimization for the last expression
+        expr = body.Car
+        env = localEnv
+        continue
+
+      case "let*":
+        localEnv := NewEnv(env)
+        bindings := expr.Cdr.Car
+        // Sequentielle Bindungen: jede sieht die vorherigen
+        for bindings != nil && bindings.Type == LIST {
+          b := bindings.Car
+          val, err := Eval(b.Cdr.Car, localEnv)  // Im lokalen env auswerten!
+          if err != nil { return nil, err }
+          localEnv.Set(b.Car.Val, val)
+          bindings = bindings.Cdr
+        }
+        // Body ausführen
+        body := expr.Cdr.Cdr
+        if body == nil {
+          return MakeNil(), nil
+        }
+        for body.Cdr != nil && body.Cdr.Type == LIST {
+          _, err := Eval(body.Car, localEnv)
+          if err != nil { return nil, err }
+          body = body.Cdr
+        }
+        expr = body.Car
+        env = localEnv
+        continue
+
+      case "cond":
+        matched := false
+        for c := expr.Cdr; c != nil && c.Type == LIST; c = c.Cdr {
+          clause := c.Car
+          if clause == nil || clause.Type != LIST {
+            return nil, fmt.Errorf("cond: Klausel muss Liste sein")
+          }
+          test := clause.Car
+          hit := test.Type == ATOM && (test.Val == "t" || test.Val == "else")
+          if !hit {
+            val, err := Eval(test, env)
+            if err != nil { return nil, err }
+            hit = isTruthy(val)
+          }
+          if hit {
+            body := clause.Cdr
+            for body != nil && body.Cdr != nil && body.Cdr.Type == LIST {
+              if _, err := Eval(body.Car, env); err != nil { return nil, err }
+              body = body.Cdr
+            }
+            if body == nil || body.Type != LIST { return MakeNil(), nil }
+            expr = body.Car
+            matched = true
+            break
+          }
+        }
+        if !matched { return MakeNil(), nil }
+        continue
+
+      case "case":
+        e, newEnv, err := evalCase(expr.Cdr, env)
+        if err != nil { return nil, err }
+        expr, env = e, newEnv
+        continue
+      }
+    }
+
+    // ── Funktionsanwendung ──
+    fn, err := Eval(expr.Car, env)
+    if err != nil { return nil, err }
+
+    // Makro → expandieren, Loop weiter (TCO)
+    if fn.Type == MACRO {
+      expanded, err := applyLambda(fn, cellToSlice(expr.Cdr))
+      if err != nil { return nil, err }
+      expr = expanded
+      continue
+    }
+
+    args, err := evalArgs(expr.Cdr, env)
+    if err != nil { return nil, err }
+
+    // Lambda → Argumente binden, Loop weiter (TCO)
+    if fn.Type == LIST {
+      closureEnv := fn.Env.(*Env)
+      localEnv := NewEnv(closureEnv)
+      if err := bindArgs(fn.Car, args, closureEnv, localEnv); err != nil {
+        return nil, err
+      }
+      expr = fn.Cdr   // body
+      env = localEnv
+      continue
+    }
+
+    // Eingebaute Funktion
+    if fn.Type != FUNC {
+      return nil, fmt.Errorf("eval: '%s' ist keine Funktion", fn)
+    }
+    return fn.Fn(args)
+  }
+}
+
+func evalArgs(args *Cell, env *Env) ([]*Cell, error) {
+  var result []*Cell
+  for args != nil && args.Type == LIST {
+    val, err := Eval(args.Car, env)
+    if err != nil { return nil, err }
+    result = append(result, val)
+    args = args.Cdr
+  }
+  return result, nil
+}
+
+func apply(fn *Cell, args []*Cell) (*Cell, error) {
+  switch fn.Type {
+  case FUNC: return fn.Fn(args)
+  case LIST: return applyLambda(fn, args)
+  default:   return nil, fmt.Errorf("apply: '%s' ist keine Funktion", fn)
+  }
+}
+
+func isTruthy(c *Cell) bool {
+  return c != nil && c.Type != NIL
+}
+
+// sliceToCell wandelt einen Go-Slice in eine Lisp-Liste um.
+func sliceToCell(args []*Cell) *Cell {
+  result := MakeNil()
+  for i := len(args) - 1; i >= 0; i-- {
+    result = Cons(args[i], result)
+  }
+  return result
+}
+
+// cellToSlice wandelt eine Lisp-Liste in einen Go-Slice um (ohne Eval).
+func cellToSlice(args *Cell) []*Cell {
+  var result []*Cell
+  for args != nil && args.Type == LIST {
+    result = append(result, args.Car)
+    args = args.Cdr
+  }
+  return result
+}
