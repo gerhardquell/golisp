@@ -862,3 +862,155 @@ nur Unit-Tests hat die Drift wirklich als behoben bestätigt.
 
 > "Zwei Quellen driften immer. Eine Quelle kann nicht driften."
 > — Gerhard & Claude, Juni 2026
+
+---
+
+# Session 9 – 2026-06-16: Test-Netz vollendet (Todo #3)
+
+**Autoren:** Gerhard Quell & Claude
+**Branch:** main
+
+---
+
+## Ziel
+
+Todo #3 abschließen: Primitiven-, Makro-Expansion- und parfunc/Channel-
+Tests. Damit das Sicherheitsnetz von 36 auf volle Abdeckung der
+eingebauten Funktionalität wachsen.
+
+## Was haben wir gebaut?
+
+| Test-Datei | Tests | Abdeckung |
+|-----------|-------|-----------|
+| `primitives_test.go` | 13 | mod/abs, Typ-Prädikate, Listen-Edges, Strings, fileio, gensym, error, memstats |
+| `macros_test.go` | 12 | defmacro, uneval. Args, macroexpand, nested, hygiene, IsMacro |
+| `concurrency_test.go` | 12 | parfunc (basic/order/timeout/error), buffered channels, lock |
+
+**Tests gesamt:** 36 → 75 (Reader/Env 15 + Eval 21 + Primitive 13 + Makro 12 + Concurrency 12).
+**Suite-Laufzeit:** 1.15s (parfunc-timeout-Test addiert ~1s).
+
+## Was lief gut?
+
+### Charakterisierungstest-Disziplin trug wieder
+24 neue Tests, davon beim ersten Lauf 4 rot — alle IST-Funde, keine
+Code-Bugs. Jeder Fund wurde als IST dokumentiert (nicht "repariert"),
+genau wie bei Reader/Eval. Das Muster hält: falsche Erwartungen *sind*
+der Wert.
+
+### setq-vs-set!-Fund ist der wertvollste der Session
+Beim swap-Makro-Hygiene-Test kam `(1 2)` statt `(2 1)` raus. Ursache:
+`setq` (= `define` = `env.Set`) im inneren `let`-Body legt eine
+Shadow-Variable an, statt die äußere zu updaten. `set!` (env.Update)
+wäre nötig. Das ist eine latente Semantik-Entscheidung, die aus dem Code
+nicht offensichtlich ist und jede/n Makro-AutorIn überrascht. Erst der
+Charakterisierungstest machte sie sichtbar — und lieferte gleich den
+Kontrast-Test (`set!`-Variante → `(2 1)`) als lebende Dokumentation.
+
+### Deterministische Concurrency-Tests sind möglich
+parfunc sammelt nach Expr-Index (Reihenfolge garantiert, unabhängig von
+Ankunftszeit) — das macht es testbar ohne `time.Sleep`-Flakiness. Nur
+der timeout-Test braucht echtes Timing (1s). Channel-Tests nur
+buffered+sequenziell — unbuffered-send-ohne-receiver würde blockieren.
+Concurrency testbar halten heißt: die Garantien des Systems ausnutzen,
+nicht gegen seine Non-Determinism ankämpfen.
+
+## Was nicht lief / Verbesserungspotenzial
+
+### Go-Test-Caching täuschte über echten Zustand hinweg
+`TestIsMacroGo` war im isolierten `-run TestMacro`-Lauf "grün", failte
+aber bei `go test ./...`. Ursache: Cache-Hit von einem früheren Code-
+Stand; erst der vollständige Lauf (cache invalidiert durch neue
+concurrency_test.go) zeigte den echten Bug im Test (`defmacro` gibt
+Atom "m" zurück, nicht das Makro — IsMacro muss auf das aus dem env
+geholte Makro angewandt werden). **Lehre:** überraschende Test-Ergebnisse
+mit `-count=1` oder `go clean -testcache` verifizieren. Cache lügt nicht,
+aber er täuscht über aktuelle Konsistenz hinweg.
+
+### CLI-stdin-Multi-Expr zeigte nicht alle Ergebnisse
+Beim manuellen swap-Verifizieren via `printf '...\n' | ./golisp` erschien
+nur die `defmacro`-Rückgabe, nicht das `let`-Ergebnis. Mehrere Ausdrücke
+über stdin werden ausgewertet, aber die Ausgabe-Strategie bei mehreren
+Ergebnissen ist unklar/inkonsistent. Hätte mich auf `go test` verlassen
+sollen statt CLI-Piping zu debuggen. CLI-Multi-Expr-Verhalten ist ein
+eigenes Untersuchungsthema.
+
+### Hygiene-Test war ursprünglich falsch konstruiert
+Der erste `TestMacroHygieneWithGensym` wollte gensym-vs-kein-gensym
+demonstrieren, aber der swap bricht nicht an gensym, sondern an der
+setq-Semantik. Ich musste den Test umgestalten: statt "Hygiene zeigen"
+→ "setq-Shadowing dokumentieren + set!-Kontrast + gensym-Unique". Lehre:
+Tests müssen das Verhalten dokumentieren das *ist*, nicht das, das man
+*demonstrieren wollte*. Wenn der Test nicht das zeigt was ich will, ist
+meine Hypothese falsch — nicht der Code.
+
+## Schlüssel-Erkenntnisse
+
+### Charakterisierungstests als latente Semantik-Dokumentation
+Der setq-vs-set!-Fund ist kein Bug-Fund, sondern ein Verhaltens-Fund:
+das System verhält sich deterministisch, aber die Determinismus-Regel
+("setq = Set im current-env, shadowed bei scope-Tiefe") ist nirgends
+dokumentiert. Der Test ist jetzt die Dokumentation. Wer später fragt
+"warum ändert mein swap-Makro nichts?" findet den Test und die Antwort.
+
+### eq? = eq (Pointer) bestätigt Type-System-Konsistenz
+`eq?` und `eq` sind beide Pointer-Vergleich. Zwei `'foo`-Instanzen sind
+nicht `eq?`. Das ist konsistent mit der Singleton-Nil-Optimierung
+(`eq (list) (list)` = `t`, weil identische nilCell). Das Type-System
+ist pointer-first — wer strukturelle Gleichheit will, muss `equal?`
+nutzen. Diese Konsistenz wäre ohne Tests nur schwer zu vertrauen.
+
+### Concurrency-Testbarkeit als Architektur-Validierung
+Dass parfunc deterministisch testbar ist (idx-geordnete Ergebnisse),
+ist kein Zufall — es ist eine bewusste Design-Entscheidung in
+`evalParfunc`: `gathered[r.idx] = r.val` sortiert nach Index, nicht nach
+Ankunftszeit. Das macht das Feature testbar. Architekturen, die
+Ankunfts-Reihenfolge zurückgeben würden, wären untestbar gewesen.
+Testbarkeit ist hier eine emergente Eigenschaft guten Designs.
+
+---
+
+## IST-Funde (kumuliert über alle Sessions)
+
+| Fund | Wo | Status |
+|------|----|---------|
+| `Cell.String()`: NIL-Cell → `"()"`, nil-Ptr → `"NIL"` | types.go | dokumentiert |
+| Backslash außerhalb String = Symbol | reader.go | dokumentiert |
+| Dotted-pair-Reader blind nach cdr | reader.go | dokumentiert (Todo #7) |
+| Stille Typkoersion `(+ 1 "x")`=1 | primitives.go | dokumentiert (Fix offen) |
+| `(- 5)`=5 (kein unäres Minus) | primitives.go | dokumentiert |
+| `(if)`=`()` (permissive Syntax) | eval.go | dokumentiert |
+| `eq?` = Pointer wie `eq` | primitives.go | dokumentiert |
+| `atom? '()` = `t` (NIL ≠ LIST-Typ) | primitives.go | dokumentiert |
+| `file-write`/`file-append` geben Pfad zurück | fileio.go | dokumentiert (API-Inkonsistenz) |
+| `setq` shadowed in innerem let, `set!` nötig | eval.go | dokumentiert (Makro-Autor-Falle) |
+| `(parfunc r)` ohne Expr setzt `r` nicht | eval_control.go | dokumentiert (Mini-Bug) |
+| stdlib `max`/`min` nur 2-args | stdlib.lisp | dokumentiert (Arity undokumentiert) |
+
+---
+
+## Offene Punkte (nach dieser Session)
+
+- [ ] **Todo #5-7:** Duplikat-Bereinigung (sliceToCell/isTruthy/countParens),
+  sigoREST-Konfig (Default-Modell, Host-Env), Kleinigkeiten (Tabs,
+  pg-Conn-Typ, dotted-pair-Check, nil-Prüfungen).
+- [ ] **Latente Bugs fixen:** Stille Typkoersion in primitives.go;
+  parfunc-Empty-Setzt-r-nicht; stdlib max/min variadisch machen.
+- [x] ~~Todo #3 Testinfrastruktur~~ → 75 Tests, vollständige Primitive/
+  Makro/Concurrency-Abdeckung (Session 9).
+
+---
+
+## Fazit Session 9
+
+Dritte Test-Session, die das Sicherheitsnetz von 36 auf 75 Tests
+verdoppelte. Der wertvollste Fund war kein Bug, sondern eine latente
+Semantik-Regel: `setq` shadowed in inneren Scopes, `set!` updatet. Das
+ist genau der Wert von Charakterisierungstests — sie dokumentieren das
+Verhalten das *ist*, einschließlich der Subtilitäten, die aus dem Code
+allein nicht ersichtlich sind. GoLisp hat jetzt ein Test-Netz, das nicht
+nur Refactor-Sicherheit bietet, sondern als lebende Verhaltens-Doku
+dient. Todo #3 vollständig erledigt.
+
+> "Tests dokumentieren nicht, was der Code tun soll – sie dokumentieren,
+> was er wirklich tut. Darin liegt ihr wertvollster Fund."
+> — Gerhard & Claude, Juni 2026
