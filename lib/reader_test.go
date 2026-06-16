@@ -133,6 +133,17 @@ func TestReadDottedPair(t *testing.T) {
     t.Errorf("(a . b) = %q (Car=%q Cdr=%q), want Cons(a,b)",
       got.String(), got.Car.String(), got.Cdr.String())
   }
+  // Trailing-Whitespace nach cdr ist ok
+  assertRead(t, "(a . b)", "(a . b)")
+}
+
+// TestReadDottedPairStrict sichert den Fix (Todo #7): früher verschluckte
+// readRest nach dotted pair blind das nächste Zeichen via r.next() – Müll
+// wie "(a . b x)" wurde still akzeptiert. Jetzt explizite )-Prüfung.
+func TestReadDottedPairStrict(t *testing.T) {
+  assertReadErr(t, "(a . b x)")   // Element nach dotted pair → Fehler
+  assertReadErr(t, "(a . b . c)") // doppelte dotted pair → Fehler
+  assertReadErr(t, "(a . b")      // fehlendes ) nach dotted pair
 }
 
 func TestReadComments(t *testing.T) {

@@ -109,7 +109,13 @@ func (r *Reader) readRest() (*Cell, error) {
     cdr, err := r.readExpr()
     if err != nil { return nil, err }
     r.skipWS()
-    r.next() // ')'
+    // Explizit ')' prüfen – früher blind r.next() (verschluckte Müll
+    // wie "(a . b x)" still). Siehe Todo #7, Reader-Test-Erkenntnis.
+    closer, ok := r.peek()
+    if !ok || closer != ')' {
+      return nil, fmt.Errorf("reader: ) nach dotted pair erwartet, got %q", closer)
+    }
+    r.next() // ')' konsumieren
     return cdr, nil
   }
 

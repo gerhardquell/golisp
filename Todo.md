@@ -133,10 +133,14 @@ inkl. privatem Key im Repo-Dir.
   `GOLISP_SIGO_HOST` → (sigo-host) zeigt env-Host.
 
 ### 7. Kleinere Qualitätsverbesserungen (niedrig)
-- [ ] Einrückung vereinheitlichen (Tabs vs. 2 Spaces)
-- [ ] PostgreSQL-Connection nicht als `Cell{Type: LIST}` zurückgeben – eigener Typ oder Markierung
-- [ ] `reader.go`: `)` nach dotted-pair explizit prüfen
-- [ ] Mehr `nil`-Prüfungen in `eval*`-Helfern
+- [ ] Einrückung vereinheitlichen (Tabs vs. 2 Spaces) – Projekt nutzt
+      bewusst 2-Space (CLAUDE.md), gofmt-Konflikt (siehe Session 8). Offen.
+- [ ] PostgreSQL-Connection nicht als `Cell{Type: LIST}` zurückgeben –
+      eigener Typ oder Markierung. Offen.
+- [x] `reader.go`: `)` nach dotted-pair explizit prüfen (2026-06-16).
+      Früher blind `r.next()` → Müll wie `(a . b x)` still akzeptiert.
+      Jetzt peek+Prüfung, Fehler bei Nicht-`)`. TestReadDottedPairStrict.
+- [ ] Mehr `nil`-Prüfungen in `eval*`-Helfern. Offen.
 
 ---
 
