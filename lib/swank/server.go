@@ -103,65 +103,12 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-// loadStdlib lädt die eingebettete Standardbibliothek
+// loadStdlib lädt die zentrale Standardbibliothek (lib.LoadStdlib).
+// Früher inline-String mit abgespeckter Teilmenge – das führte zu Drift
+// zwischen CLI (volle stdlib.lisp) und Server (20/52 Funktionen). Jetzt
+// eine gemeinsame Quelle via //go:embed in lib/stdlib.go.
 func (s *Server) loadStdlib() error {
-	// Minimale inline stdlib - nur sichere Definitionen
-	stdlib := `
-(defun not (x) (if x () t))
-(defun null? (x) (if x () t))
-(defun atom? (x) (atom x))
-(defun list? (x) (if (atom x) () t))
-(defun caar (x) (car (car x)))
-(defun cadr (x) (car (cdr x)))
-(defun cdar (x) (cdr (car x)))
-(defun cddr (x) (cdr (cdr x)))
-(defun caddr (x) (car (cdr (cdr x))))
-(defun cadar (x) (car (cdr (car x))))
-(defun length (lst)
-  (if (null? lst)
-      0
-      (+ 1 (length (cdr lst)))))
-(defun append (a b)
-  (if (null? a)
-      b
-      (cons (car a) (append (cdr a) b))))
-(defun reverse (lst)
-  (labels ((rev (acc lst)
-             (if (null? lst)
-                 acc
-                 (rev (cons (car lst) acc) (cdr lst)))))
-    (rev () lst)))
-(defun member (x lst)
-  (if (null? lst)
-      ()
-      (if (equal? x (car lst))
-          lst
-          (member x (cdr lst)))))
-(defun assoc (key lst)
-  (if (null? lst)
-      ()
-      (if (equal? key (caar lst))
-          (car lst)
-          (assoc key (cdr lst)))))
-(defun map (f lst)
-  (if (null? lst)
-      ()
-      (cons (f (car lst)) (map f (cdr lst)))))
-(defun filter (f lst)
-  (if (null? lst)
-      ()
-      (if (f (car lst))
-          (cons (car lst) (filter f (cdr lst)))
-          (filter f (cdr lst)))))
-(defun reduce (f acc lst)
-  (if (null? lst)
-      acc
-      (reduce f (f acc (car lst)) (cdr lst))))
-(defun identity (x) x)
-(defun compose (f g) (lambda (x) (f (g x))))
-`
-	_, err := lib.LoadString(stdlib, s.env)
-	return err
+	return lib.LoadStdlib(s.env)
 }
 
 // handleConnection behandelt eine einzelne Client-Verbindung

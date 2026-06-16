@@ -9,7 +9,6 @@
 package main
 
 import (
-	_ "embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -21,9 +20,6 @@ import (
 
 	"golisp/lib"
 )
-
-//go:embed stdlib.lisp
-var stdlibSrc string
 
 func test(env *lib.Env, s string) {
 	cell, _ := lib.Read(s)
@@ -272,8 +268,8 @@ func main() {
 	// Setup environment
 	env := lib.BaseEnv()
 
-	// Standardbibliothek laden (eingebettet)
-	if _, err := lib.LoadString(stdlibSrc, env); err != nil {
+	// Standardbibliothek laden (eingebettet, zentral in lib.LoadStdlib)
+	if err := lib.LoadStdlib(env); err != nil {
 		fmt.Fprintln(os.Stderr, "stdlib Fehler:", err)
 		os.Exit(1)
 	}

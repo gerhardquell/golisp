@@ -32,11 +32,23 @@ End-to-End-Smoke-Tests (TCO 100k, quasiquote, closures, parfunc, macros).
       catch, eval, parfunc, lock, blockReturn
 - [x] `eval_load.go` (101) – load, LoadString, Pfad-Auflösung (GOLISP_PATH)
 
-### 2. stdlib zentralisieren (hoch)
-`golispd` lädt in `lib/swank/server.go` eine eigene inline-stdlib statt der eingebetteten `stdlib.lisp`.
+### 2. stdlib zentralisiert ✓ (2026-06-16)
+`golispd` lud in `lib/swank/server.go` eine eigene inline-stdlib (20/52
+Funktionen) statt der eingebetteten `stdlib.lisp` → Drift. Server-Clients
+bekamen keine `iota`/`flatten`/`gcd` etc.
 
-- [ ] Server auf `//go:embed stdlib.lisp` umstellen
-- [ ] Oder gemeinsame `LoadStdlib(env)`-Hilfsfunktion in `lib/` anlegen
+Lösung: Option B – gemeinsame `LoadStdlib(env)` in `lib/stdlib.go`.
+`//go:embed` im Server nicht direkt nutzbar (embed verbietet `..`-Pfade),
+daher `stdlib.lisp` nach `lib/` verschoben und dort zentral eingebettet.
+
+- [x] `stdlib.lisp` (root) → `lib/stdlib.lisp` (git mv)
+- [x] `libs/stdlib.lisp` (totes Duplikat, untracked) entfernt
+- [x] `lib/stdlib.go`: `//go:embed stdlib.lisp` + `LoadStdlib(env *Env) error`
+- [x] `main.go`: embed+LoadString → `lib.LoadStdlib(env)`
+- [x] `lib/swank/server.go`: `loadStdlib()`+inline-String → `lib.LoadStdlib(s.env)`
+      (server.go 304→251 Zeilen)
+- [x] Verifikation: CLI + Server liefern beide volle 52-Funktionen-stdlib
+      (iota/flatten/gcd/length/cadr über Server-Client getestet)
 
 ### 3. Testinfrastruktur ausbauen (mittel)
 Aktuell `lib/env_test.go` (27 Zeilen) + `lib/reader_test.go` (13 Tests).

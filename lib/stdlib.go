@@ -1,0 +1,26 @@
+//**********************************************************************
+//  lib/stdlib.go
+//  Autor    : Gerhard Quell - gquell@skequell.de
+//  CoAutor  : claude sonnet 4.6
+//  Copyright: 2026 Gerhard Quell - SKEQuell
+//  Erstellt : 20260616
+//**********************************************************************
+// Zentrale Einbettung und Ladung der Standardbibliothek.
+// Sowohl die CLI (main.go) als auch der Server (cmd/golispd) nutzen
+// LoadStdlib – eine Quelle, keine Drift zwischen inline- und embed-Varianten.
+//**********************************************************************
+
+package lib
+
+import _ "embed"
+
+//go:embed stdlib.lisp
+var stdlibSrc string
+
+// LoadStdlib lädt die eingebettete Standardbibliothek in env.
+// Einmal pro Env aufrufen (nach BaseEnv). Fehler = Syntaxfehler in
+// stdlib.lisp – sollte zur Compile-Zeit nie passieren.
+func LoadStdlib(env *Env) error {
+  _, err := LoadString(stdlibSrc, env)
+  return err
+}
