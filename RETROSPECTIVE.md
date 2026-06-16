@@ -739,3 +739,126 @@ Tests gebaut, eval.go gesplittet), ein atomic Commit, sauber dokumentiert.
 
 > "Am Trampolin operiert man nicht ohne Netz — das Netz kommt zuerst."
 > — Gerhard & Claude, Juni 2026
+
+---
+
+# Session 8 – 2026-06-16: stdlib zentralisiert
+
+**Autoren:** Gerhard Quell & Claude
+**Branch:** main
+
+---
+
+## Ziel
+
+Todo #2: `golispd` lud in `lib/swank/server.go` eine eigene inline-stdlib
+(abgespeckte 20/52 Funktionen) statt der eingebetteten `stdlib.lisp` →
+Drift. Server-Clients bekamen keine `iota`/`flatten`/`gcd` etc. Eine
+gemeinsame Quelle schaffen.
+
+## Was haben wir gebaut?
+
+| Arbeit | Ergebnis |
+|--------|----------|
+| `stdlib.lisp` verschoben | root → `lib/stdlib.lisp` (git mv) |
+| `libs/stdlib.lisp` entfernt | totes inhaltsgleiches Duplikat, untracked |
+| `lib/stdlib.go` neu | `//go:embed stdlib.lisp` + zentrale `LoadStdlib(env)` |
+| `main.go` umgestellt | embed+LoadString → `lib.LoadStdlib(env)` |
+| `lib/swank/server.go` umgestellt | `loadStdlib()`+inline-String → `lib.LoadStdlib(s.env)` |
+
+**Server-stdlib vorher:** 20 Funktionen (inline).
+**Server-stdlib nachher:** 52 Funktionen (volle `stdlib.lisp`, wie CLI).
+**server.go:** 304 → 251 Zeilen (inline-String entfernt).
+
+## Was lief gut?
+
+### Embed-Pfad-Limit früh erkannt
+Todo-Option A ("Server auf `//go:embed` umstellen") war nicht direkt
+machbar: Go verbietet `..` in embed-Pfaden, also kann `lib/swank/` nicht
+auf `../../stdlib.lisp` im root zugreifen. Lösung: stdlib.lisp *selbst*
+nach `lib/` verschieben, wo der Package-Baum sie erreicht. Architektur
+folgt aus Tooling-Restriktion — früher erkannt, kein Sackgassen-Refactor.
+
+### Eine Quelle, eine Funktion
+Jetzt gibt es genau eine `LoadStdlib(env)` in `lib/stdlib.go` und genau
+eine `stdlib.lisp`. CLI und Server rufen dieselbe Funktion auf. Drift
+strukturell ausgeschlossen, nicht nur behoben.
+
+### End-to-End über beide Binaries verifiziert
+Nicht nur lib-Tests grün — sondern golispd gebaut, auf freiem Port
+gestartet, und über golisp-client die ehemals fehlenden Funktionen
+abgefragt: `iota`/`flatten`/`gcd`/`length`/`cadr` liefern korrekte
+Ergebnisse über den Server. Drift wirklich weg, nicht nur syntaktisch.
+
+## Was nicht lief / Verbesserungspotenzial
+
+### gofmt-Reflex gegen CLAUDE.md
+Ich habe `gofmt -w lib/stdlib.go` laufen lassen → tabs. Erst danach
+zeigte `gofmt -l .`, dass **alle** lib-Files "nicht-konform" sind — GoLisp
+nutzt bewusst 2-Space (CLAUDE.md: "2 Spaces, keine Tabs"). gofmt hätte
+die Projektkonvention verletzt. Revertiert. **Lehre:** bei Go-Projekten
+nicht reflexhaft gofmt anwenden — erst checken, ob das Projekt gofmt-
+Konvention oder eigene (CLAUDE.md) hat. LSP-Linter und CLAUDE.md können
+widersprüchlich sein; CLAUDE.md gewinnt.
+
+### Env-Vorrang über Flags fiel beim Smoke-Test auf
+`--port 49321` wurde durch `GOLISP_PORT=9123` aus dem Environment
+übersteuert → Test-Server startete auf belegtem Port 9123 und crashte.
+Erst nach explizitem `GOLISP_PORT=49321` vor dem Server-Aufruf lief es.
+CLAUDE.md dokumentiert die Vorrang-Regel (env > flag) implizit. Für
+Smoke-Tests: env immer explizit setzen. UX-Fund, der in die Server-Doku
+gehört — kein Bug, aber eine Falle für Test-Autoren.
+
+### `max`-Smoke-Test falsch geraten
+`(max 3 7 2)` → "zu viele Argumente" — stdlib `max` nimmt nur 2 Args,
+nicht variadisch. Mein Test-Input falsch, kein Code-Bug. Zeigt aber:
+stdlib-Funktionen haben eigene Arity-Limits, die nirgends dokumentiert
+sind. Kandidat für später (stdlib-Docstrings oder Arity-Check).
+
+## Schlüssel-Erkenntnisse
+
+### Drift strukturell ausschließen, nicht nur beheben
+Das Problem war nicht "Server hat eine schlechte stdlib", sondern
+"Server hat eine *andere* stdlib als CLI". Zwei Quellen = garantierte
+Drift über die Zeit. Die Lösung ist nicht, beide inline-Strings gleich
+zu halten, sondern **eine Quelle** zu schaffen. Ein `LoadStdlib`-Aufruf
+an zwei Stellen kann nicht driften; zwei String-Literale an zwei Stellen
+werden es.
+
+### CLAUDE.md schlägt Linter
+Projekt-Konventionen (CLAUDE.md) sind higher-priority als Standard-Tools
+(gofmt). LSP/Diagnostics zeigen gofmt-Abweichungen als Warnung — aber
+wenn das Projekt bewusst davon abweicht, ist die Warnung Fehlalarm.
+Immer CLAUDE.md lesen *bevor* man Tool-Warnungen "repariert".
+
+### Tooling-Restriktion bestimmt Architektur
+Embed verbietet `..`-Pfade. Das ist keine Geschmacksfrage, sondern ein
+hartes Go-Feature. Daraus folgt: shared Assets gehören in das Package,
+das sie einbettet — nicht ins Repo-Root. stdlib.lisp in `lib/` ist nicht
+nur aufgeräumt, sondern *notwendig* für `//go:embed` aus `lib/`.
+
+---
+
+## Offene Punkte (nach dieser Session)
+
+- [ ] **Todo #3 Rest:** Primitiven-Tests, Makro-Expansion-Tests,
+  parfunc/Channel-Tests.
+- [ ] **Todo #5-7:** Duplikat-Bereinigung, sigoREST-Konfig, Kleinigkeiten.
+- [ ] **Latenter Bug:** Stille Typkoersion in `primitives.go` (`(+ 1 "x")`=1).
+- [ ] **Neu entdeckt:** stdlib `max`/`min` etc. nur 2-args, nicht
+  variadisch — Arity-Limits undokumentiert.
+- [x] ~~Todo #2 stdlib zentralisieren~~ → `LoadStdlib`, eine Quelle (Session 8).
+
+---
+
+## Fazit Session 8
+
+Kompakte Session: ein Hoch-Prio-Punkt (stdlib-Drift) strukturell gelöst —
+nicht zwei String-Literale synchronisiert, sondern eine gemeinsame Quelle
+geschaffen. Zwei Fallstricke unterwegs (gofmt-Reflex, Env-Vorrang) haben
+gezeigt, dass Tooling-Konvention und CLAUDE.md auseinanderliegen können;
+CLAUDE.md gewinnt. Verifikation über beide Binaries (CLI + Server) statt
+nur Unit-Tests hat die Drift wirklich als behoben bestätigt.
+
+> "Zwei Quellen driften immer. Eine Quelle kann nicht driften."
+> — Gerhard & Claude, Juni 2026
