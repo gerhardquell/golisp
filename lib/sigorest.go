@@ -15,6 +15,7 @@ import (
   "fmt"
   "io"
   "net/http"
+  "os"
   "strings"
   "sync"
   "time"
@@ -23,12 +24,30 @@ import (
 var (
   sigoHost    = "http://127.0.0.1:9080"
   sigoTimeout = 30 * time.Second
+  // Default-Modell wenn (sigo "prompt") ohne Modell aufgerufen wird.
+  // Überschreibbar via GOLISP_SIGO_MODEL. Fallback gem25-flt (live,
+  // schnell/billig) – alter Default ollama-gemma3-4b ist nicht mehr
+  // verfügbar (Session 6).
+  sigoDefaultModel = "gem25-flt"
   // Rate-Limiting: max 1 Request pro 2 Sekunden pro Model
   sigoRateLimiter = time.Tick(2 * time.Second)
   // Circuit-Breaker Schutz
   sigoLastCall    time.Time
   sigoCallMutex   sync.Mutex
 )
+
+// init liest sigoREST-Konfiguration aus Umgebungsvariablen (analog
+// GOLISP_HOST/GOLISP_PORT für golispd):
+//   GOLISP_SIGO_HOST  – sigoREST-Host (default http://127.0.0.1:9080)
+//   GOLISP_SIGO_MODEL – Default-Modell für (sigo "prompt")
+func init() {
+  if h := os.Getenv("GOLISP_SIGO_HOST"); h != "" {
+    sigoHost = strings.TrimRight(h, "/")
+  }
+  if m := os.Getenv("GOLISP_SIGO_MODEL"); m != "" {
+    sigoDefaultModel = m
+  }
+}
 
 // RegisterSigo fügt (sigo prompt model session-id) in die Umgebung ein
 func RegisterSigo(env *Env) {
@@ -45,7 +64,7 @@ func fnSigo(args []*Cell) (*Cell, error) {
   if len(args) < 1 { return nil, fmt.Errorf("sigo: mindestens 1 Argument") }
 
   prompt    := args[0].Val
-  model     := "ollama-gemma3-4b"
+  model     := sigoDefaultModel
   sessionID := ""
   host      := sigoHost
 

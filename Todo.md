@@ -122,9 +122,15 @@ inkl. privatem Key im Repo-Dir.
       Build (.v2-Suffix). Entscheidung offen: nach docs/ verschieben
       oder behalten (Gerhards Call).
 
-### 6. sigoREST-Konfiguration verbessern (niedrig)
-- [ ] Default-Modell (`ollama-gemma3-4b`) zentral als Konstante oder Env-Var konfigurierbar machen
-- [ ] sigo-Host über Umgebungsvariable steuerbar (aktuell nur via `(sigo-host ...)` oder Parameter)
+### 6. sigoREST-Konfiguration verbessert ✓ (2026-06-16)
+- [x] Default-Modell als `sigoDefaultModel`-Variable + `GOLISP_SIGO_MODEL`
+      env. Fallback `gem25-flt` (live, schnell) statt totem
+      `ollama-gemma3-4b` (war nicht mehr verfügbar → Default-Call failte).
+- [x] sigo-Host via `GOLISP_SIGO_HOST` env beim Start (zusätzlich zu
+      `(sigo-host ...)` zur Laufzeit und 4. Parameter pro Call).
+- [x] CLAUDE.md: Env-Var-Tabelle + Beispiele dokumentiert.
+- Verifikation: Default-Call `(sigo "OK")` ohne Modell → "OK" (gem25-flt);
+  `GOLISP_SIGO_HOST` → (sigo-host) zeigt env-Host.
 
 ### 7. Kleinere Qualitätsverbesserungen (niedrig)
 - [ ] Einrückung vereinheitlichen (Tabs vs. 2 Spaces)

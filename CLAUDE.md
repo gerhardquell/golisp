@@ -280,6 +280,24 @@ Host: http://127.0.0.1:9080 (Default)
 Endpoint: POST /v1/chat/completions
 ```
 
+### Konfiguration via Umgebungsvariablen
+
+Beim Start liest GoLisp (analog `GOLISP_HOST`/`GOLISP_PORT` für `golispd`):
+
+| Env-Var | Default | Bedeutung |
+|---------|---------|-----------|
+| `GOLISP_SIGO_HOST` | `http://127.0.0.1:9080` | sigoREST-Host für `(sigo ...)` |
+| `GOLISP_SIGO_MODEL` | `gem25-flt` | Default-Modell wenn `(sigo "prompt")` ohne Modell |
+
+```bash
+# Multi-Server-Setup
+GOLISP_SIGO_HOST="http://mammouth:9080" ./golisp -i
+GOLISP_SIGO_MODEL="cl48-o" ./golisp -e '(sigo "Erkläre TCO")'
+```
+
+Zur Laufzeit zusätzlich änderbar: `(sigo-host "http://...")` oder als
+4. Parameter pro Call: `(sigo "prompt" "model" "" "http://host:9080")`.
+
 Aktuelle Modell-Shortcodes (sigoREST dynamisch via Mammouth/Moonshot/ZAI,
 Stand 2026-06-16). **Modelle sind runtime-dynamisch** – Provider deployen
 neue Versionen, alte fallen weg. Diese Tabelle ist eine Momentaufnahme;
