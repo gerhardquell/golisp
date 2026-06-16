@@ -280,25 +280,30 @@ Host: http://127.0.0.1:9080 (Default)
 Endpoint: POST /v1/chat/completions
 ```
 
-Aktuelle Modell-Shortcodes (sigoREST dynamisch via Mammouth/Moonshot/ZAI):
+Aktuelle Modell-Shortcodes (sigoREST dynamisch via Mammouth/Moonshot/ZAI,
+Stand 2026-06-16). **Modelle sind runtime-dynamisch** – Provider deployen
+neue Versionen, alte fallen weg. Diese Tabelle ist eine Momentaufnahme;
+die wahrheitsgemäße Quelle ist immer `(sigo-models)`.
 
-| Shortcode | Modell |
-|-----------|--------|
-| `cl4-s`   | claude-sonnet-4 |
-| `cl45-h`  | claude-haiku-4-5 |
-| `cl45-s`  | claude-sonnet-4-5 |
-| `cl46-s`  | claude-sonnet-4-6 |
-| `cl46-o`  | claude-opus-4-6 |
-| `gem25-f` | gemini-2.5-flash |
-| `gem25-p` | gemini-2.5-pro |
-| `gem35-f` | gemini-3.5-flash |
-| `kimi`    | kimi-k2.5 |
-| `kimik26` | kimi-k2.6 |
-| `ds32`    | deepseek-v3.2 |
-| `gpt41`   | gpt-4.1 |
-| `gpt52`   | gpt-5.2 |
+| Shortcode | Modell | Shortcode | Modell |
+|-----------|--------|-----------|--------|
+| `cl4-s`   | claude-sonnet-4 | `cl45-h`  | claude-haiku-4-5 |
+| `cl45-s`  | claude-sonnet-4-5 | `cl46-s`  | claude-sonnet-4-6 |
+| `cl45-o`  | claude-opus-4-5 | `cl46-o`  | claude-opus-4-6 |
+| `cl47-o`  | claude-opus-4-7 | `cl48-o`  | claude-opus-4-8 |
+| `gem25-f` | gemini-2.5-flash | `gem25-p` | gemini-2.5-pro |
+| `gem35-f` | gemini-3.5-flash | `gem3-fpv`| gemini-3-flash-preview |
+| `gpt41`   | gpt-4.1 | `gpt5`    | gpt-5 |
+| `gpt52`   | gpt-5.2 | `gpt52-ch`| gpt-5.2-chat |
+| `gpt54-n` | gpt-5.4-nano | `gpt5-m` | gpt-5-mini |
+| `kimi`    | kimi-k2.5 | `kimik26` | kimi-k2.6 |
+| `kimik27-cod` | kimi-k2.7-code | `kimik27-codhs` | kimi-k2.7-code-highspeed |
+| `ds32`    | deepseek-v3.2 | `ds4-p`   | deepseek-v4-pro |
+| `ds4-f`   | deepseek-v4-flash | `glm5` | glm-5 |
+| `glm47`   | glm-4.7 | `grok43`  | grok-4.3 |
+| `llama4-mv` | llama-4-maverick | `qwen3-c52pl` | qwen3-coder-plus |
 
-Vollständige Liste: `(sigo-models)`
+Vollständige Live-Liste (~80 Modelle, ID+Shortcode-Paare): `(sigo-models)`
 
 ### Rate-Limiting & Best Practices
 
