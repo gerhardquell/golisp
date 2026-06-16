@@ -604,3 +604,138 @@ echte Ursache durch direkten API-Test gefunden, Fix sauber in zwei Dateien.
 
 > "Ein Bug der zwei Projekte überspannt, lehrt mehr als zehn Features."
 > — Gerhard & Claude, Juni 2026
+
+---
+
+# Session 7 – 2026-06-16: Test-Netz und eval.go-Split
+
+**Autoren:** Gerhard Quell & Claude
+**Branch:** main
+**Abschluss-Commit:** `7917510 Split eval.go (1003 Zeilen) in 6 kohäsive Module`
+
+---
+
+## Ziel
+
+Drei offene Hoch-Prio-Punkte aus `Todo.md` aufräumen, in der Reihenfolge,
+die das Risiko minimiert: erst Rätsel klären (certs), dann Sicherheitsnetz
+bauen (Tests), dann am Herzstück operieren (eval.go-Split).
+
+## Was haben wir gebaut?
+
+| Arbeit | Ergebnis |
+|--------|----------|
+| `certs/`-Rätsel geklärt | Verwaistes sigoREST-Cert erkannt, gelöscht, `.gitignore`-Guard |
+| Reader-Tests (Todo #3.1) | 13 Charakterisierungstests in `reader_test.go` |
+| Eval-Tests (Todo #3.2) | 21 Tests in `eval_test.go`, inkl. TCO-Schutz (200k tail-rec) |
+| `eval.go`-Split (Todo #1) | 1003 Zeilen → 6 Module, alle <300, reines Move |
+| Atomic Commit | 11 files, +1680/−1003 |
+
+**Tests vorher:** 2 (`env_test.go`). **Tests nachher:** 36.
+**`eval.go`:** 1003 → 0 Zeilen (gelöscht, 6 neue Dateien).
+
+---
+
+## Was lief gut?
+
+### Die Reihenfolge stimmte
+certs → Tests → Split. Am TCO-Trampolin operieren ohne Test-Netz wäre
+russisch Roulette gewesen. Das Sicherheitsnetz zuerst bauen war der
+entscheidende Plan.
+
+### Test-Netz hat sich beim ersten Split-Versuch bezahlt gemacht
+Build + 36 Tests beim *ersten* Lauf nach dem Split grün. Kein einziges Mal
+TCO kaputt — weil die Tests *vorher* standen, nicht weil wir Glück hatten.
+
+### Charakterisierung statt TDD bei existierendem Code
+Bei `reader.go` und `eval.go` (beide existierten schon) wurden
+Charakterisierungstests geschrieben, kein TDD. Beim ersten Lauf rot:
+4/13 Reader-Tests + 5/21 Eval-Tests — *alle* meine Erwartungen falsch,
+keine Code-Bugs. Hätte ich TDD-Disziplin angewendet, hätte ich den Code
+"repariert", um meine falsche Vermutung zu erfüllen — und echtes Verhalten
+kaputtgemacht.
+
+### Bug-Verortung in Tests
+Latente Bugs (z.B. stille Typkoersion `(+ 1 "x")` = 1) wurden in Tests
+sauber dem *richtigen* File zugeordnet (`primitives.go`, nicht `eval.go`).
+Beim Split kein Fehlalarm — bricht ein Test, weiß ich, dass der Split schuld
+ist, nicht ein zufällig mitkommender primitives-Bug.
+
+### End-to-End-Verifikation, nicht nur Unit-Tests
+lib-Tests grün allein reicht nicht. Smoke-Tests über die echte `golisp`-
+Binary haben gezeigt, dass der Macro-Mechanismus wirklich läuft und TCO
+in der Praxis greift (100k tail-rec → `ok`).
+
+---
+
+## Was nicht lief / Verbesserungspotenzial
+
+### `-e` nimmt nur eine Expression
+Erst beim Smoke-Test entdeckt: TCO- und Macro-Tests über `-e` schienen zu
+"failen" (zeigten nur `defun`-Rückgabe). CLAUDE.md sagt `-e EXPR` (Singular) —
+die Konsequenz (zweiter Ausdruck still ignoriert) ist nicht offensichtlich.
+Für künftige manuelle Multi-Expr-Tests: stdin/Multiline nutzen.
+
+### Erste Test-Erwartungen zu oft falsch geraten
+9 von 34 Tests beim ersten Lauf rot — zwar der *Wert* von
+Charakterisierungstests, zeigt aber: mein anfängliches Modell vom
+GoLisp-Verhalten war lückenhaft. CLAUDE.md vorher gründlicher lesen
+(NIL-Semantik, eq vs equal?, catch-Syntax) hätte einige Vermutungen
+vorab korrigiert.
+
+### `git status --cached` als Flag nicht verfügbar
+Kleiner Stolperer bei der Verifikation. `git diff --cached` geht. Harmlos,
+aber hätte ich wissen können.
+
+---
+
+## Schlüssel-Erkenntnisse
+
+### Tail-Forms müssen inline im Eval-Loop bleiben
+`if`/`begin`/`let`/`let*`/`cond`/`case` setzen `expr`/`env` und machen
+`continue` — das *ist* das Trampolin. Auslagern hätte echten Funktionsaufruf
+statt O(1)-Loop bedeutet → TCO kaputt → 200k-Test crasht. Nur `case`
+delegiert an eine Hilfsfunktion, weil es ein Rückgabe-Tripel
+`(*Cell, *Env, error)` nutzt, um env ins Trampolin zurückzureichen — der
+einzige sichere Weg, eine Tail-Form auszulagern.
+
+### Go-Tool respektiert keine `.gitignore`
+Das `certs/`-Problem hätte `.gitignore` *nicht* gelöst — Go traversiert bei
+`./...` jedes Unterverzeichnis, unabhängig von Git-Regeln. Nur physisches
+Entfernen oder `.`/`_`-Verzeichnisprefix hilft. Häufige, gut dokumentierte Falle.
+
+### Eine Grenze pro Kohäsions-Gruppe, nicht eine pro Zeilenzahl
+`eval_specialforms.go` war nach erstem Move 313 Zeilen (über Limit). Statt
+künstlich aufzuspalten, wurde `load` (thematisch I/O) nach `eval_load.go`
+gezogen. Kohäsiver als mechanisches Zeilen-Splitten.
+
+### Charakterisierungstests sind antisymmetrisch zu TDD
+TDD: Test-erst (SOLL), dann Code bis grün. Charakterisierung: Code-erst
+(IST), dann Tests die das IST festhalten. Falsche Raten beim Schreiben
+sind der Wert — sie zeigen, wo das mentale Modell vom Code abweicht.
+
+---
+
+## Offene Punkte (nach dieser Session)
+
+- [ ] **Todo #2 (hoch):** stdlib zentralisieren — `golispd` lädt inline-stdlib
+  statt `//go:embed stdlib.lisp`. Drift-Gefahr zwischen zwei stdlib-Versionen.
+- [ ] **Todo #3 Rest:** Primitiven-Tests, Makro-Expansion-Tests,
+  parfunc/Channel-Tests.
+- [ ] **Todo #5-7:** Duplikat-Bereinigung, sigoREST-Konfig, Kleinigkeiten.
+- [ ] **Latenter Bug aus Eval-Tests:** Stille Typkoersion in `primitives.go`
+  (`(+ 1 "x")` = 1, kein Fehler) — separater Fix, nicht eval.go.
+- [x] ~~`eval.go` 1003 Zeilen~~ → aufgeteilt in 6 Module (Session 7).
+
+---
+
+## Fazit Session 7
+
+Eine Session, die dem Motto "Test-Netz zuerst, dann am Herzstück operieren"
+folgte — und es hat sich ausgezahlt. Der eval.go-Split lief beim ersten
+Versuch grün, weil das TCO-Trampolin durch 36 Tests geschützt war, nicht
+durch Glück. Drei offene Hoch-Prio-Punkte auf null reduziert (certs geklärt,
+Tests gebaut, eval.go gesplittet), ein atomic Commit, sauber dokumentiert.
+
+> "Am Trampolin operiert man nicht ohne Netz — das Netz kommt zuerst."
+> — Gerhard & Claude, Juni 2026
