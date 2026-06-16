@@ -249,13 +249,22 @@ func TestEvalErrors(t *testing.T) {
   }
 }
 
-// TestEvalSilentTypeCoercion dokumentiert IST-Verhalten, das KEINEN Fehler
-// wirft: Arithmetik-Primitive greifen direkt auf .Num zu. Strings haben
-// Num=0 und werden still als 0 addiert/subtrahiert. Latenter Bug, aber
-// beim Split zu erhalten – ein Fix gehört in primitives.go, nicht eval.go.
-func TestEvalSilentTypeCoercion(t *testing.T) {
-  evalEq(t, `(+ 1 "x")`, "1")     // String.Num=0 → still addiert
-  evalEq(t, `(- 5 "y")`, "5")
+// TestEvalStrictArith sichert das strict-Typing in Arithmetik und
+// numerischen Vergleichen: Nicht-Zahlen (Strings, Listen) werfen Fehler
+// statt still als 0 einzufließen. (Früher latenter Bug: (+ 1 "x")=1;
+// gefixt 2026-06-16 über checkNumbers in primitives.go.)
+func TestEvalStrictArith(t *testing.T) {
+  evalErr(t, `(+ 1 "x")`)          // String in Arithmetik → Fehler
+  evalErr(t, `(- 5 "y")`)
+  evalErr(t, `(* 2 (list 1))`)     // Liste in Arithmetik → Fehler
+  evalErr(t, `(/ 1 "a")`)
+  evalErr(t, `(mod 10 "b")`)
+  evalErr(t, `(abs "c")`)
+  evalErr(t, `(= 1 "x")`)          // numerischer Vergleich mit String → Fehler
+  evalErr(t, `(< "a" 5)`)
+  // Korrekte Nutzung bleibt funktionieren
+  evalEq(t, `(+ 1 2)`, "3")
+  evalEq(t, `(= 1 1)`, "t")
 }
 
 // TestEvalIfPermissive dokumentiert IST: degenerierte if-Formen werfen

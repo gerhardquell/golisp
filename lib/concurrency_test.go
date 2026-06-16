@@ -41,11 +41,12 @@ func TestParfuncErrorBecomesNil(t *testing.T) {
 }
 
 func TestParfuncEmpty(t *testing.T) {
-  // Keine Expr → parfunc liefert nil zurück.
-  // IST-Mini-Bug: resultName (r) wird NICHT im env gesetzt, weil
-  // evalParfunc bei leeren exprList früh per `return MakeNil()` abspringt
-  // – vor dem env.Set. Daher Rückgabe direkt prüfen, nicht via r.
+  // Keine Expr → parfunc liefert nil zurück UND setzt resultName im env.
+  // (Früher Mini-Bug: frühes return vor env.Set – r blieb ungebunden.
+  //  Jetzt gefixt: env.Set(resultName, MakeNil()) vor return.)
   evalEq(t, `(parfunc r)`, "()")
+  // r ist jetzt im env gesetzt (auf nil)
+  evalEq(t, `(parfunc r2) r2`, "()")
 }
 
 func TestParfuncStoresInEnv(t *testing.T) {

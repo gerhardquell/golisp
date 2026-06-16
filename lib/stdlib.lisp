@@ -133,8 +133,8 @@
 (defun abs (n)
   (if (negative? n) (- 0 n) n))
 
-(defun max (a b) (if (>= a b) a b))
-(defun min (a b) (if (<= a b) a b))
+(defun max (a &rest rest) (reduce (lambda (x y) (if (>= x y) x y)) a rest))
+(defun min (a &rest rest) (reduce (lambda (x y) (if (<= x y) x y)) a rest))
 
 (defun square (x) (* x x))
 

@@ -223,7 +223,10 @@ func evalParfunc(args *Cell, env *Env) (*Cell, error) {
   for e := rest; e != nil && e.Type == LIST; e = e.Cdr {
     exprList = append(exprList, e.Car)
   }
-  if len(exprList) == 0 { return MakeNil(), nil }
+  if len(exprList) == 0 {
+    env.Set(resultName, MakeNil())
+    return MakeNil(), nil
+  }
 
   // Parallel auswerten — jede Goroutine sendet ihr Ergebnis in einen Channel
   type parfuncResult struct {

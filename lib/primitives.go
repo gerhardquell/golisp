@@ -110,13 +110,27 @@ func makeFn(f func([]*Cell) (*Cell, error)) *Cell {
 
 // ---- Arithmetik ----
 
+// checkNumbers stellt sicher, dass alle args NUMBER sind. Arithmetik und
+// numerische Vergleiche greifen direkt auf .Num zu – ohne Check würden
+// Strings (Num=0) oder Listen still als 0 einfließen (stiller Datenverlust).
+func checkNumbers(name string, args []*Cell) error {
+  for _, a := range args {
+    if a == nil || a.Type != NUMBER {
+      return fmt.Errorf("%s: Zahl erwartet, got %s", name, a)
+    }
+  }
+  return nil
+}
+
 func fnAdd(args []*Cell) (*Cell, error) {
+  if err := checkNumbers("+", args); err != nil { return nil, err }
   n := 0.0
   for _, a := range args { n += a.Num }
   return MakeNum(n), nil
 }
 
 func fnSub(args []*Cell) (*Cell, error) {
+  if err := checkNumbers("-", args); err != nil { return nil, err }
   if len(args) == 0 { return MakeNum(0), nil }
   n := args[0].Num
   for _, a := range args[1:] { n -= a.Num }
@@ -124,6 +138,7 @@ func fnSub(args []*Cell) (*Cell, error) {
 }
 
 func fnMul(args []*Cell) (*Cell, error) {
+  if err := checkNumbers("*", args); err != nil { return nil, err }
   n := 1.0
   for _, a := range args { n *= a.Num }
   return MakeNum(n), nil
@@ -131,14 +146,16 @@ func fnMul(args []*Cell) (*Cell, error) {
 
 func fnDiv(args []*Cell) (*Cell, error) {
   if len(args) < 2 { return nil, fmt.Errorf("/: min. 2 Argumente") }
+  if err := checkNumbers("/", args); err != nil { return nil, err }
   if args[1].Num == 0 { return nil, fmt.Errorf("/: Division durch 0") }
   return MakeNum(args[0].Num / args[1].Num), nil
 }
 
-// ---- Vergleiche ----
+// ---- Vergleiche (numerisch, strict) ----
 
 func fnEq(args []*Cell) (*Cell, error) {
   if len(args) < 2 { return nil, fmt.Errorf("=: 2 Argumente nötig") }
+  if err := checkNumbers("=", args); err != nil { return nil, err }
   if args[0].Num == args[1].Num {
     return MakeAtom("t"), nil
   }
@@ -147,24 +164,28 @@ func fnEq(args []*Cell) (*Cell, error) {
 
 func fnLt(args []*Cell) (*Cell, error) {
   if len(args) < 2 { return nil, fmt.Errorf("<: 2 Argumente nötig") }
+  if err := checkNumbers("<", args); err != nil { return nil, err }
   if args[0].Num < args[1].Num { return MakeAtom("t"), nil }
   return MakeNil(), nil
 }
 
 func fnGt(args []*Cell) (*Cell, error) {
   if len(args) < 2 { return nil, fmt.Errorf(">: 2 Argumente nötig") }
+  if err := checkNumbers(">", args); err != nil { return nil, err }
   if args[0].Num > args[1].Num { return MakeAtom("t"), nil }
   return MakeNil(), nil
 }
 
 func fnGe(args []*Cell) (*Cell, error) {
   if len(args) < 2 { return nil, fmt.Errorf(">=: 2 Argumente nötig") }
+  if err := checkNumbers(">=", args); err != nil { return nil, err }
   if args[0].Num >= args[1].Num { return MakeAtom("t"), nil }
   return MakeNil(), nil
 }
 
 func fnLe(args []*Cell) (*Cell, error) {
   if len(args) < 2 { return nil, fmt.Errorf("<=: 2 Argumente nötig") }
+  if err := checkNumbers("<=", args); err != nil { return nil, err }
   if args[0].Num <= args[1].Num { return MakeAtom("t"), nil }
   return MakeNil(), nil
 }
@@ -197,6 +218,7 @@ func fnRandom(args []*Cell) (*Cell, error) {
 
 func fnMod(args []*Cell) (*Cell, error) {
   if len(args) < 2 { return nil, fmt.Errorf("mod: 2 Argumente nötig") }
+  if err := checkNumbers("mod", args); err != nil { return nil, err }
   b := args[1].Num
   if b == 0 { return nil, fmt.Errorf("mod: Division durch Null") }
   return MakeNum(math.Mod(args[0].Num, b)), nil
@@ -204,6 +226,7 @@ func fnMod(args []*Cell) (*Cell, error) {
 
 func fnAbs(args []*Cell) (*Cell, error) {
   if len(args) < 1 { return nil, fmt.Errorf("abs: 1 Argument nötig") }
+  if err := checkNumbers("abs", args); err != nil { return nil, err }
   return MakeNum(math.Abs(args[0].Num)), nil
 }
 

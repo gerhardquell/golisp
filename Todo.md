@@ -86,13 +86,19 @@ Aktuell `lib/env_test.go` (27 Zeilen) + `lib/reader_test.go` (13 Tests).
 - Dotted-pair-Reader verschluckt blind das Zeichen nach cdr (Todo #7) –
   als IST dokumentiert, kein Fix in den Tests.
 
-**Eval-Test-Erkenntnisse (latente Bugs, NICHT eval.go-Split-relevant):**
-- `(+ 1 "x")` = 1, kein Fehler: Arithmetik-Primitive greifen direkt auf
-  `.Num` zu, Strings haben Num=0 → stille Typkoersion. Fix gehört in
-  `primitives.go` (Todo #7-Nachfolger), nicht eval.go.
-- `(- 5)` = 5: kein unäres Minus, `fnSub(1 Arg)` = `args[0]`.
-- `(if)` = `()`: degenerierte if-Form ohne cond/else → Nil, kein Fehler.
-- Sicherheitsnetz für eval.go-Split steht: 36 Tests gesamt (15+21).
+**Eval-Test-Erkenntnisse (latente Bugs):**
+- [x] ~~`(+ 1 "x")` = 1, stille Typkoersion~~ → gefixt 2026-06-16:
+      `checkNumbers` in primitives.go macht Arithmetik (+,-,*,/,mod,abs)
+      und Vergleiche (=,<,>,>=,<=) strict – Fehler statt stiller 0.
+      Breaking, aber stdlib-interne Nutzung bricht nicht (Zahlen sauber).
+- `(- 5)` = 5: kein unäres Minus, `fnSub(1 Arg)` = `args[0]`. (IST, ok)
+- `(if)` = `()`: degenerierte if-Form ohne cond/else → Nil, kein Fehler. (IST, ok)
+- [x] ~~`(parfunc r)` ohne Expr setzt r nicht~~ → gefixt 2026-06-16:
+      env.Set(resultName, MakeNil()) vor early return.
+- [x] ~~stdlib `max`/`min` nur 2-args~~ → gefixt 2026-06-16: variadisch
+      via &rest + reduce, backwards-kompatibel.
+- Sicherheitsnetz steht: 75 Tests gesamt (15 Reader/Env + 21 Eval +
+  13 Primitive + 12 Makro + 12 Concurrency).
 
 ### 4. `certs/`-Berechtigungsproblem gelöst ✓ (2026-06-16)
 `certs/` enthielt verwaistes sigoREST-Cert-Paar (`server.crt`/`server.key`),
