@@ -1014,3 +1014,164 @@ dient. Todo #3 vollständig erledigt.
 > "Tests dokumentieren nicht, was der Code tun soll – sie dokumentieren,
 > was er wirklich tut. Darin liegt ihr wertvollster Fund."
 > — Gerhard & Claude, Juni 2026
+
+---
+
+# Session 10 – 2026-06-16: Latente Bugs gefixt
+
+**Autoren:** Gerhard Quell & Claude
+**Branch:** main
+
+---
+
+## Ziel
+
+Die in Sessions 7-9 dokumentierten latenten Bugs beheben. Drei Kandidaten
+aus der kumulierten IST-Funde-Tabelle:
+1. `(parfunc r)` ohne Expr setzt `r` nicht im env (Mini-Bug)
+2. Stille Typkoersion `(+ 1 "x")`=1 (stiller Datenverlust)
+3. stdlib `max`/`min` nur 2-args, nicht variadisch
+
+## Was haben wir gemacht?
+
+### Bug 1: parfunc-empty (safe fix)
+`evalParfunc` sprang bei leerer exprList früh per `return MakeNil()` ab –
+*vor* `env.Set(resultName, ...)`. Fix: `env.Set(resultName, MakeNil())`
+vor das return ziehen. `r` ist jetzt gebunden. Backwards-kompatibel.
+
+### Bug 3: max/min variadisch (low-risk)
+stdlib `max`/`min` waren `(defun max (a b) ...)` – nur 2 Argumente.
+CL-Variante ist variadisch. Fix via `&rest` + `reduce`:
+`(defun max (a &rest rest) (reduce (lambda (x y) (if (>= x y) x y)) a rest))`.
+Backwards-kompatibel: `(max 3 7)` funktioniert weiter, `(max 3 7 2)`=7 neu.
+
+### Bug 2: Stille Typkoersion (breaking, Design-Entscheidung)
+Arithmetik-Primitive (`+,-,*,/,mod,abs`) und Vergleiche (`=,<,>,>=,<=`)
+griffen direkt auf `.Num` zu. Strings haben `Num=0`, wurden still addiert:
+`(+ 1 "x")`=1, `(= "a" "a")`=t. Stiller Datenverlust.
+
+**Design-Entscheidung via AskUserQuestion:** drei Optionen (Strict /
+Lax belassen / Nur Vergleiche). Gerhard wählte **Strict**.
+
+Fix: zentrale `checkNumbers(name, args)`-Hilfsfunktion in primitives.go,
+die alle args auf `NUMBER`-Typ prüft und `fmt.Errorf("%s: Zahl erwartet,
+got %s", name, a)` wirft. Eingebaut in alle 11 betroffenen Primitive.
+Vergleiche mit strict gemacht für Konsistenz (sonst `(+ 1 "x")`→error
+aber `(= 1 "x")`→still `()`).
+
+**Breaking:** Programme die auf stiller Koersion vertrauten, brechen
+jetzt. Aber: nur 1 Test failte (der den Bug dokumentiert hatte), keine
+stdlib-interne Nutzung brach (`length`, `iota`, `max`, `gcd` reichen
+Zahlen sauber weiter). Confidence aus 75-Test-Netz.
+
+## Was lief gut?
+
+### Test-Netz als Confidence-Quelle für breaking Change
+Die strict-Typing-Änderung ist breaking. Aber das 75-Test-Netz deckte
+genau ab, was kaputtgehen könnte: nur `TestEvalSilentTypeCoercion` failte
+(der Bug war dort als IST dokumentiert). Kein stdlib-Pfad brach. Ohne das
+Netz wäre ein breaking Change ein Glücksspiel – mit Netz eine berechnete
+Entscheidung. Genau der Compound-Wert der Test-Investition aus Session 7+9.
+
+### Design-Entscheidung eingeholt statt geraten
+Bei Bug 2 (breaking) nicht einfach "ich mache strict" geraten, sondern
+per AskUserQuestion drei Optionen mit Preview präsentiert. Gerhard
+entschied. Breaking Changes gehören dem Nutzer, nicht dem Werkzeug.
+
+### Kumulierte IST-Funde-Tabelle als Arbeits-Backlog
+Die in Session 9 eingeführte Tabelle diente hier direkt als
+Bug-Backlog: drei Einträge mit "dokumentiert (Fix offen)" wurden
+abgearbeitet. Ohne die Tabelle wären die Bugs über Sessions verstreut
+und einzeln mühsam wiederzufinden. Dokumentation als TODO-Liste.
+
+## Was nicht lief / Verbesserungspotenzial
+
+### test_infra-Discovery: evalStr lädt keine stdlib
+Beim Testen von Bug 3 (max/min) fiel auf: der Test-Helper `evalStr`
+nutzt `BaseEnv()` ohne `LoadStdlib` – stdlib-Funktionen (max, min, iota)
+sind in Unit-Tests nicht testbar. Bug 3 musste via CLI-Smoke verifiziert
+werden (main.go lädt stdlib). Lücke: kein formeller Test für
+stdlib-Funktionen. Kandidat für später: `evalStd(src)`-Helper mit
+LoadStdlib, oder eigenes stdlib_test.go.
+
+### Vergleiche-strict war Ausweitung der Wahl
+Gerhard wählte "Strict" im Arithmetik-Kontext. Ich habe die Vergleiche
+(`=,<,>`) *zusätzlich* strict gemacht, mit Begründung "Konsistenz". Das
+ist eine Interpretation seiner Wahl. Hätte ich die Vergleiche separat
+nachfragen sollen? Wahrscheinlich ja – es war eine Ausweitung. Hat sich
+als richtig erwiesen (kein Widerspruch), aber das Prinzip "breaking
+Changes gehören dem Nutzer" gilt auch für Ausweitungen.
+
+## Schlüssel-Erkenntnisse
+
+### Tests ermöglichen breaking Changes mit Confidence
+Das ist die Umkehrung der üblichen "Tests verhindern Regression"-Story:
+Tests *ermöglichen* mutige Changes, weil sie aufzeigen, was genau bricht.
+Strict typing ist breaking – aber mit 75 Tests war es eine berechnete
+Entscheidung, kein Sprung ins Dunkle. Der Wert eines Test-Netzes wächst
+nicht nur mit der Abdeckung, sondern mit der *Confidence*, die es für
+kommende Refactorings/Bugfixes bietet.
+
+### `checkNumbers` als zentrale Wächter-Funktion
+Statt in jeder Primitive inline `if a.Type != NUMBER` zu schreiben, eine
+Hilfsfunktion mit Operator-Namen. Vorteil: einheitliche Fehlermeldung
+("+ : Zahl erwartet, got ..."), wartbar an einer Stelle, Muster für
+künftige Primitive etabliert. Architektur-Gewinn aus dem Bug: die Lösung
+ist strukturierter als der Bug-Zustand.
+
+### Breaking-Change-Kommunikation ist separater Schritt
+Strict typing bricht Programme, die (absichtlich/unabsichtlich) auf
+stiller Koersion vertrauten. Tests dokumentieren das neue Verhalten, aber
+Nutzer-Communication (CHANGELOG, Release-Note) ist ein separater Schritt,
+den die Tests nicht ersetzen. U-Boot-Philosophie mildert (reift in Ruhe),
+aber beim "Zeigen" erwähnenswert.
+
+---
+
+## IST-Funde-Status (aktualisiert)
+
+| Fund | Wo | Status |
+|------|----|---------|
+| `Cell.String()`: NIL→`()`, nil-Ptr→`"NIL"` | types.go | dokumentiert |
+| Backslash = Symbol | reader.go | dokumentiert |
+| Dotted-pair-Reader blind | reader.go | offen (Todo #7) |
+| ~~Stille Typkoersion~~ | primitives.go | **gefixt (strict)** |
+| `(- 5)`=5 (kein unäres Minus) | primitives.go | IST, ok |
+| `(if)`=`()` (permissive) | eval.go | IST, ok |
+| `eq?`=Pointer | primitives.go | dokumentiert |
+| `atom? '()`=t | primitives.go | dokumentiert |
+| `file-write`/`-append` geben Pfad | fileio.go | dokumentiert (API) |
+| `setq` shadowed in innerem let | eval.go | dokumentiert |
+| ~~`(parfunc r)` ohne Expr setzt r nicht~~ | eval_control.go | **gefixt** |
+| ~~stdlib `max`/`min` nur 2-args~~ | stdlib.lisp | **gefixt (variadisch)** |
+
+3 von 12 dokumentierten Funds gefixt. 6 bleiben als gewolltes IST, 1 offen
+(dotted-pair, Todo #7), 2 als API-Inkonsistenz dokumentiert.
+
+---
+
+## Offene Punkte (nach dieser Session)
+
+- [ ] **Todo #5-7:** Duplikat-Bereinigung, sigoREST-Konfig, Kleinigkeiten.
+- [ ] **test_infra:** `evalStd(src)`-Helper oder stdlib_test.go –
+  stdlib-Funktionen formell testbar machen.
+- [ ] **Breaking-Change-Note:** strict typing für künftiges "Release"
+  dokumentieren (CHANGELOG o.ä.).
+- [x] ~~3 latente Bugs~~ → parfunc-empty, Typkoersion (strict), max/min
+  variadisch gefixt (Session 10).
+
+---
+
+## Fazit Session 10
+
+Kompakte Bug-Fix-Session: drei dokumentierte latente Bugs abgearbeitet,
+davon eine breaking Design-Entscheidung (strict typing) per
+AskUserQuestion mit Gerhard geklärt. Das 75-Test-Netz machte den
+breaking Change zu einer berechneten Entscheidung statt einem Glücksspiel
+– nur der Test, der den Bug dokumentiert hatte, failte. Kumulierte
+IST-Funde-Tabelle diente als direktes Bug-Backlog. Drei Funds von zwölf
+gefixt, die Struktur (checkNumbers) ist besser als der Bug-Zustand.
+
+> "Tests verhindern nicht nur Regression – sie ermöglichen mutige
+>  Changes. Confidence ist der wahre Compound-Wert eines Test-Netzes."
+> — Gerhard & Claude, Juni 2026
