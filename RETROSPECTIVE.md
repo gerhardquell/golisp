@@ -1175,3 +1175,161 @@ gefixt, die Struktur (checkNumbers) ist besser als der Bug-Zustand.
 > "Tests verhindern nicht nur Regression – sie ermöglichen mutige
 >  Changes. Confidence ist der wahre Compound-Wert eines Test-Netzes."
 > — Gerhard & Claude, Juni 2026
+
+---
+
+# Session 11 – 2026-06-16: Aufräumen & Konfig (Todo #5, #6, #7.3)
+
+**Autoren:** Gerhard Quell & Claude
+**Branch:** main
+**Tagesabschluss-Retro** (5. Session des Tages nach 7-10)
+
+---
+
+## Ziel
+
+Nach Test-Netz (7+9), stdlib-Zentralisierung (8) und Bugfixes (10) die
+niedrig-prioren Todos abarbeiten: #5 Code-Duplikation, #6 sigoREST-Konfig,
+#7.3 dotted-pair-Reader-Check. Den Tag sauber abschließen.
+
+## Was haben wir gemacht?
+
+### Todo #5 – Code-Duplikation bereinigt
+Drei byteweise identische Helper-Duplikate entfernt: unexported
+`isTruthy`/`sliceToCell`/`cellToSlice` in eval_core.go waren Schatten der
+exportierten `IsTruthy`/`SliceToCell`/`CellToSlice` in types_helpers.go.
+13 Aufrufstellen über 5 Files auf exported-Versionen umgestellt.
+`readline.go.v2` (dokumentierter Fallback) nach `docs/` archiviert.
+`countParens` existierte gar nicht (Todo veraltet).
+
+### Todo #6 – sigoREST-Konfig via Env-Vars
+Default-Modell war `ollama-gemma3-4b` — **nicht mehr in Live-Liste** →
+`(sigo "prompt")` ohne Modell-Arg failte (verdeckter Bug). Neuer Default
+`gem25-flt` (live, verifiziert). `GOLISP_SIGO_HOST`/`GOLISP_SIGO_MODEL`
+env beim Start via `init()`. CLAUDE.md dokumentiert.
+
+### Todo #7.3 – dotted-pair-Reader-Check
+`readRest` konsumierte nach `(a . b)` das `)` blind per `r.next()` —
+Müll wie `(a . b x)` wurde still akzeptiert. Jetzt `peek`+Prüfung, Fehler
+bei Nicht-`)`. Session-7-Fund (damals als IST dokumentiert) jetzt Bugfix.
+
+### Zusätzlich: sigoREST-Zugang verifiziert + CLAUDE.md-Modelle aktualisiert
+Live-Check: sigoREST PID 1757, Ports 9080/9443, `(sigo "test" "gem25-flt")`
+→ "OK". CLAUDE.md-Modelltabelle von 13 → ~30 Einträge ergänzt (cl47-o,
+cl48-o, gem35-f etc.), als "runtime-dynamisch, siehe (sigo-models)"
+markiert. Memory `sigorest_models.md` neu erstellt.
+
+## Tagesbilanz
+
+| Metrik | Wert |
+|--------|------|
+| Commits heute | 12 (6 Code + 5 Retro/Doc + 1 Config) |
+| Sessions dokumentiert | 5 (Session 7-11) |
+| Todos erledigt | #1, #2, #3, #4, #5, #6, #7.3 |
+| Tests | 2 → 76 |
+| eval.go | 1003 Zeilen → 6 Module |
+| Latente Bugs gefixt | 4 (Typkoersion, parfunc-empty, max/min, dotted-pair) |
+| Stdlib-Quellen | 2 (Drift) → 1 (LoadStdlib) |
+| Duplikate entfernt | 3 Helper + 1 Backup-File |
+
+## Was lief gut?
+
+### Test-Netz als durchgehender Compound-Wert
+Jede Session nach Session 7 profitierte vom Test-Netz: Split lief grün
+beim ersten Versuch, stdlib-Zentralisierung verifiziert über beide
+Binaries, Bugfixes (breaking strict typing!) mit Confidence, Dedup über
+5 Files ohne Runtime-Regression, dotted-pair-Fix sofort gesichert. Der
+Invest in 76 Tests zahlte sich bei *jedem* der 12 Commits aus. Das ist
+der Definition von Compound-Value.
+
+### Kumulierte IST-Funde-Tabelle als Arbeits-Backlog gereift
+Session 9 eingeführt, Session 10 als Bug-Backlog genutzt (3 gefixt),
+Session 11 setzte den 4. Fund (dotted-pair) um. Die Tabelle ist jetzt
+eine *Trackbare Verhaltens-Spezifikation* — jeder Eintrag hat Status
+(dokumentiert/gefixt/IST-ok). Was als Beobachtung begann, wurde zu
+verlässlicher Projekt-Doku.
+
+### Code/Doc/Retro-Rhythmus als built-in Disziplin
+12 Commits, aber kein einziges Mal "8 Commits am Stück durchziehen".
+Jeder Code-Commit hatte einen klaren Fokus, jeder Retro-Commit erzwang
+Reflexion dazwischen. Commit-Rhythmus als built-in Retrospektive — man
+kann nicht mutig refactor-ieren ohne zwischendurch zu fragen "was lief
+gut, was nicht".
+
+### Config-Feature deckte verdeckten Bug auf
+Todo #6 war als "Config verbessern" deklariert, entpuppte sich als
+Bugfix: der Default `ollama-gemma3-4b` war tot. Wer nur "Config
+hinzufügen" wollte, hätte den toten Default übersehen. Todo-Liste
+sorgfältig lesen = Bug-Quelle erkennen.
+
+## Was nicht lief / Verbesserungspotenzial
+
+### Sehr langer Tag, 5 Sessions — Erschöpfungsrisiko
+12 Commits, 5 Retros in einem Tag ist außergewöhnlich viel. Späte
+Sessions (10, 11) liefen noch diszipliniert, aber das Risiko von
+Qualitätsverlust in Session 12+ wäre real. **Lehre:** bei langen Tagen
+bewusst Pausen machen oder ab Session 8-9 nur noch niedrig-risk Tasks.
+Heute ging es gut weil die Test-Infra jeden Schritt auffing.
+
+### gofmt-vs-2-Space-Konflikt bleibt ungelöst (Todo #7 Rest)
+Projekt nutzt bewusst 2-Space (CLAUDE.md), gofmt will tabs. `gofmt -l`
+listet alle Files. Keine Lösung gefunden — nur vermieden (nicht gofmt
+anwenden). Offen: pre-commit-Hook der 2-Space erzwingt, oder CLAUDE.md
+explizit "gofmt ignorieren" dokumentieren. Unschön, aber nicht blockierend.
+
+### verwaiste Memory-Files (user_profile, project_status) unentdeckt
+MEMORY.md verweist auf 3 Files, nur sigorest_models existierte (heute
+erstellt). user_profile und project_status fehlen — project_status wäre
+stark veraltet ("eval.go aufteilen offen" — völlig falsch nach heute).
+Lücke für nächste Session.
+
+## Schlüssel-Erkenntnisse des Tages
+
+### 1. Sicherheitsnetz zuerst, dann operieren
+Session 7s Prinzip ("Netz vor Trampolin-OP") trug den ganzen Tag. Die
+Reihenfolge certs → Tests → Split → Bugs → Config → Dedup war nicht
+Zufall sondern Risiko-Minimierung: jeder Schritt stand auf dem vorigen.
+
+### 2. Eine Quelle schlägt Synchronisation
+stdlib-Zentralisierung (Session 8): eine `LoadStdlib` statt zwei
+String-Literale. Helper-Dedup (Session 11): ein `IsTruthy` statt
+Schatten-Duplikat. Derselbe Architektur-Gedanke, zweimal angewandt:
+strukturelle Unmöglichkeit von Drift/Duplikat statt Disziplin.
+
+### 3. Charakterisierungstests als Bugfix-Backlog
+Sessions 7+9 dokumentierten IST-Verhalten (4 latente Bugs). Sessions 10+11
+fixten sie. Der Zyklus Bug-finden → als IST festhalten → später gezielt
+fixen → als SOLL sichern ist reif geworden. Tests als lebende Verhaltens-
+Doku, die in ausführbare Specs reift.
+
+### 4. Config-Aufgaben verbergen oft Bugs
+Todo #6 "Config verbessern" → toter Default-Modell-Bug. Todo #2 "stdlib
+zentralisieren" → Drift-Bug. Wer Config-Todos liest und "nur Settings"
+denkt, verpasst die versteckten Defekte. Implizite Annahmen (Default
+existiert, zwei Quellen sind gleich) immer verifizieren.
+
+---
+
+## Offene Punkte (nach Session 11)
+
+- [ ] **Todo #7 Rest:** Einrückung (gofmt-vs-2-Space-Konflikt ungelöst),
+  pg-Conn-Typ (postgres.go), nil-Prüfungen in eval-Helfern.
+- [ ] **verwaiste Memory-Files:** user_profile.md, project_status.md
+  erstellen/aktualisieren (project_status stark veraltet).
+- [ ] **test_infra:** `evalStd(src)`-Helper oder stdlib_test.go.
+- [ ] **Breaking-Change-Note:** strict typing für künftiges Release.
+
+---
+
+## Fazit Session 11 & Tagesabschluss
+
+Kompakte Aufräum-Session die drei niedrig-prioren Todos abarbeitete,
+davon einer (#6) wieder einen verdeckten Bug aufdeckte (toter Default-
+Modell). Der Tag endet mit 12 Commits, 5 dokumentierten Sessions, 76
+Tests, 4 gefixten Bugs — und einem GoLisp das strukturell gesünder ist
+als morgens: weniger Duplikate, eine stdlib-Quelle, konfigurierbarer
+sigoREST, striktere Typisierung, sauberer Reader.
+
+> "Ein Tag der das System nicht funktional erweiterte, aber strukturell
+>  heilte. Manchmal ist Aufräumen die wertvollste Feature-Arbeit."
+> — Gerhard & Claude, Juni 2026
