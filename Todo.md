@@ -60,9 +60,24 @@ Aktuell `lib/env_test.go` (27 Zeilen) + `lib/reader_test.go` (13 Tests).
       if, begin, let/let*, cond, case, lambda, defun-Rekursion, Closures,
       quote, setq/setq*, quasiquote, eq/equal?, catch, Fehlerfälle.
       **TCO-Schutz:** 200.000-fache Tail-Rekursion (if+begin) grün.
-- [ ] Primitiven-Tests
-- [ ] Makro-Expansion-Tests
-- [ ] `parfunc` / Channel-Tests
+- [x] Primitiven-Tests (2026-06-16): mod/abs, Typ-Prädikate, Listen-Edges,
+      String-Funktionen (length/append/substring/upcase/downcase/->number/
+      ->list/contains/replace/trim), fileio (write/append/read/exists?/delete
+      mit TempDir), gensym, error, memstats. 13 Tests.
+      **IST-Funde:** eq?=Pointer wie eq; file-write/append geben Pfad zurück
+      (nicht t); atom? auf '()=t (leere Liste ist Atom-Typ).
+- [x] Makro-Expansion-Tests (2026-06-16): defmacro+Aufruf, unevaluierte
+      Args, macroexpand (incl. Nicht-Makro/Error), geschachtelte Makros,
+      &rest, Arity-Fehler, IsMacro (Go). 12 Tests.
+      **IST-Fund:** `setq` (=define=env.Set) im inneren let-Body shadowed
+      die äußere Variable statt zu updaten – `set!` (env.Update) nötig
+      für swap-Makros. Wichtig für Makro-Autoren.
+- [x] `parfunc` / Channel-Tests (2026-06-16): parfunc (basic, order,
+      error→nil, empty, timeout 1s, Rückgabetyp), buffered channels
+      (FIFO, send-returns-value), lock-make/lock basic + Syntax-Fehler.
+      12 Tests, nur deterministische Muster (kein blocking-send-ohne-receiver).
+      **IST-Fund:** `(parfunc r)` ohne Expr setzt `r` NICHT im env
+      (frühes `return MakeNil()` vor env.Set) – Mini-Bug.
 
 **Reader-Test-Erkenntnisse (für eval.go-Split relevant):**
 - `Cell.String()` rendert `NIL`-Cell als `"()"`, nil-Pointer als `"NIL"`.
