@@ -46,7 +46,7 @@ func bindArgs(params *Cell, args []*Cell, closureEnv *Env, localEnv *Env) error 
     if p.Type == NIL { break }
     if p.Type == ATOM {
       // Dotted rest-Parameter: (lambda (a b . rest) ...)
-      localEnv.Set(p.Val, sliceToCell(args[argIdx:]))
+      localEnv.Set(p.Val, SliceToCell(args[argIdx:]))
       return nil
     }
     if p.Type != LIST { break }
@@ -62,7 +62,7 @@ func bindArgs(params *Cell, args []*Cell, closureEnv *Env, localEnv *Env) error 
         if p == nil || p.Type != LIST || p.Car == nil {
           return fmt.Errorf("lambda: &rest braucht Parameter-Namen")
         }
-        localEnv.Set(p.Car.Val, sliceToCell(args[argIdx:]))
+        localEnv.Set(p.Car.Val, SliceToCell(args[argIdx:]))
         return nil
       }
     }

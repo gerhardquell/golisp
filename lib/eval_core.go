@@ -70,7 +70,7 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
       case "if":
         cond, err := Eval(expr.Cdr.Car, env)
         if err != nil { return nil, err }
-        if isTruthy(cond) {
+        if IsTruthy(cond) {
           expr = expr.Cdr.Cdr.Car
         } else if expr.Cdr.Cdr != nil && expr.Cdr.Cdr.Cdr != nil && expr.Cdr.Cdr.Cdr.Type == LIST {
           expr = expr.Cdr.Cdr.Cdr.Car
@@ -152,7 +152,7 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
           if !hit {
             val, err := Eval(test, env)
             if err != nil { return nil, err }
-            hit = isTruthy(val)
+            hit = IsTruthy(val)
           }
           if hit {
             body := clause.Cdr
@@ -183,7 +183,7 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
 
     // Makro → expandieren, Loop weiter (TCO)
     if fn.Type == MACRO {
-      expanded, err := applyLambda(fn, cellToSlice(expr.Cdr))
+      expanded, err := applyLambda(fn, CellToSlice(expr.Cdr))
       if err != nil { return nil, err }
       expr = expanded
       continue
@@ -231,25 +231,6 @@ func apply(fn *Cell, args []*Cell) (*Cell, error) {
   }
 }
 
-func isTruthy(c *Cell) bool {
-  return c != nil && c.Type != NIL
-}
-
-// sliceToCell wandelt einen Go-Slice in eine Lisp-Liste um.
-func sliceToCell(args []*Cell) *Cell {
-  result := MakeNil()
-  for i := len(args) - 1; i >= 0; i-- {
-    result = Cons(args[i], result)
-  }
-  return result
-}
-
-// cellToSlice wandelt eine Lisp-Liste in einen Go-Slice um (ohne Eval).
-func cellToSlice(args *Cell) []*Cell {
-  var result []*Cell
-  for args != nil && args.Type == LIST {
-    result = append(result, args.Car)
-    args = args.Cdr
-  }
-  return result
-}
+// IsTruthy, sliceToCell, CellToSlice sind vereinheitlicht in types_helpers.go
+// als exportierte IsTruthy, SliceToCell, CellToSlice – eine Quelle, keine
+// Duplikate (Todo #5, 2026-06-16).

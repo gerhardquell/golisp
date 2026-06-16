@@ -117,14 +117,14 @@ func fnPgQuery(args []*Cell) (*Cell, error) {
 		}
 
 		// Zeile als Liste hinzufügen
-		resultRows = append(resultRows, sliceToCell(rowCells))
+		resultRows = append(resultRows, SliceToCell(rowCells))
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("pg-query: %w", err)
 	}
 
-	return sliceToCell(resultRows), nil
+	return SliceToCell(resultRows), nil
 }
 
 // pg-exec: (pg-exec conn "INSERT INTO users (name) VALUES ($1)" "Alice")

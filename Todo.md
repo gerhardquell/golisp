@@ -110,10 +110,17 @@ inkl. privatem Key im Repo-Dir.
 - [x] `certs/` gelöscht, `.gitignore`-Guard (`certs/`, `*.crt`, `*.key`, `*.pem`)
 - [x] `go test ./...` läuft wieder vollständig durch
 
-### 5. Code-Duplikation bereinigen (niedrig)
-- [ ] `sliceToCell` / `CellToSlice` – Versionen in `eval.go` und `types_helpers.go` vereinheitlichen
-- [ ] `isTruthy` / `IsTruthy` zusammenführen
-- [ ] `countParens` / `countDepth` – gemeinsame Hilfsfunktion in `lib/`
+### 5. Code-Duplikation bereinigt ✓ (2026-06-16)
+- [x] `sliceToCell`/`cellToSlice` (eval_core.go, unexported) entfernt –
+      Aufrufer (eval_lambda, eval_specialforms, postgres) nutzen jetzt
+      die exportierte `SliceToCell`/`CellToSlice` aus types_helpers.go.
+- [x] `isTruthy` (eval_core.go) entfernt – 7 Aufrufer (eval_core,
+      eval_specialforms, eval_control) nutzen jetzt `IsTruthy`.
+- [x] `countParens` existiert nicht (Todo veraltet); `countDepth` nur
+      einmal in readline.go (aktiv). `readline.go.v2` ist eine
+      dokumentierte Fallback-Implementierung (ohne chzyer), nicht im
+      Build (.v2-Suffix). Entscheidung offen: nach docs/ verschieben
+      oder behalten (Gerhards Call).
 
 ### 6. sigoREST-Konfiguration verbessern (niedrig)
 - [ ] Default-Modell (`ollama-gemma3-4b`) zentral als Konstante oder Env-Var konfigurierbar machen

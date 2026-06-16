@@ -43,7 +43,7 @@ func evalMacroexpand(args *Cell, env *Env) (*Cell, error) {
 
   // Wenn es ein Makro ist, expandieren wir es
   if fn.Type == MACRO {
-    return applyLambda(fn, cellToSlice(form.Cdr))
+    return applyLambda(fn, CellToSlice(form.Cdr))
   }
 
   // Kein Makro → Form unverändert zurückgeben
@@ -147,7 +147,7 @@ func evalAnd(args *Cell, env *Env) (*Cell, error) {
   for args != nil && args.Type == LIST {
     val, err := Eval(args.Car, env)
     if err != nil { return nil, err }
-    if !isTruthy(val) { return MakeNil(), nil }  // Kurzschluss!
+    if !IsTruthy(val) { return MakeNil(), nil }  // Kurzschluss!
     result = val
     args = args.Cdr
   }
@@ -159,7 +159,7 @@ func evalOr(args *Cell, env *Env) (*Cell, error) {
   for args != nil && args.Type == LIST {
     val, err := Eval(args.Car, env)
     if err != nil { return nil, err }
-    if isTruthy(val) { return val, nil }  // Kurzschluss!
+    if IsTruthy(val) { return val, nil }  // Kurzschluss!
     args = args.Cdr
   }
   return MakeNil(), nil
@@ -169,7 +169,7 @@ func evalOr(args *Cell, env *Env) (*Cell, error) {
 func evalNot(args *Cell, env *Env) (*Cell, error) {
   val, err := Eval(args.Car, env)
   if err != nil { return nil, err }
-  if isTruthy(val) { return MakeNil(), nil }
+  if IsTruthy(val) { return MakeNil(), nil }
   return MakeAtom("t"), nil
 }
 

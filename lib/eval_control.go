@@ -27,7 +27,7 @@ func evalWhile(args *Cell, env *Env) (*Cell, error) {
   for {
     cond, err := Eval(test, env)
     if err != nil { return nil, err }
-    if !isTruthy(cond) { return MakeNil(), nil }
+    if !IsTruthy(cond) { return MakeNil(), nil }
     if _, err := Eval(body, env); err != nil { return nil, err }
   }
 }
@@ -58,7 +58,7 @@ func evalDo(args *Cell, env *Env) (*Cell, error) {
     // Abbruchtest
     cond, err := Eval(test, localEnv)
     if err != nil { return nil, err }
-    if isTruthy(cond) { return Eval(result, localEnv) }
+    if IsTruthy(cond) { return Eval(result, localEnv) }
     // Body auswerten
     if _, err := Eval(body, localEnv); err != nil { return nil, err }
     // Alle Step-Ausdrücke gleichzeitig auswerten (im alten env!)
