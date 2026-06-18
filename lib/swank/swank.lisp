@@ -42,8 +42,9 @@
                                                 :version "0.2"
                                                 :program "golisp")
                           :machine (list :instance "unknown")
-                          :package (list :name "USER")
-                          :features (list)))
+                          :package (list :name "USER" :prompt "USER")
+                          :features (list)
+                          :version "0.2"))
               id)))
 
 (defun swank:create-repl (id)
