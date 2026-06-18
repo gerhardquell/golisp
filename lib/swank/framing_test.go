@@ -25,14 +25,14 @@ func TestWriteFrame(t *testing.T) {
     t.Fatalf("writeFrame failed: %v", err)
   }
   got := buf.String()
-  want := "000008\n(foo 42)"
+  want := "000008(foo 42)"
   if got != want {
     t.Fatalf("got %q, want %q", got, want)
   }
 }
 
 func TestReadFrame(t *testing.T) {
-  input := "000008\n(foo 42)(foo 42)"
+  input := "000008(foo 42)(foo 42)"
   r := strings.NewReader(input)
   cell, err := readFrame(r)
   if err != nil {

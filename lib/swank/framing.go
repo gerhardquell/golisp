@@ -20,16 +20,16 @@ import (
 )
 
 // readFrame reads one SWANK length-prefixed S-expression.
+// Format: 6-digit hex length followed immediately by the S-expression.
 func readFrame(r io.Reader) (*lib.Cell, error) {
   br := bufio.NewReader(r)
-  line, err := br.ReadString('\n')
-  if err != nil {
+  lenBuf := make([]byte, 6)
+  if _, err := io.ReadFull(br, lenBuf); err != nil {
     return nil, fmt.Errorf("readFrame: %w", err)
   }
-  line = line[:len(line)-1] // drop '\n'
-  n, err := strconv.ParseInt(line, 16, 32)
+  n, err := strconv.ParseInt(string(lenBuf), 16, 32)
   if err != nil {
-    return nil, fmt.Errorf("readFrame: invalid length %q: %w", line, err)
+    return nil, fmt.Errorf("readFrame: invalid length %q: %w", string(lenBuf), err)
   }
   payload := make([]byte, n)
   if _, err := io.ReadFull(br, payload); err != nil {
@@ -43,9 +43,10 @@ func readFrame(r io.Reader) (*lib.Cell, error) {
 }
 
 // writeFrame writes one SWANK length-prefixed S-expression.
+// Format: 6-digit hex length followed immediately by the S-expression.
 func writeFrame(w io.Writer, cell *lib.Cell) error {
   payload := cell.String()
-  frame := fmt.Sprintf("%06x\n%s", len(payload), payload)
+  frame := fmt.Sprintf("%06x%s", len(payload), payload)
   _, err := io.WriteString(w, frame)
   if err != nil {
     return fmt.Errorf("writeFrame: %w", err)

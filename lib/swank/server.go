@@ -38,6 +38,7 @@ func RunServer(addr string) error {
 
 func handleConn(conn net.Conn) {
   defer conn.Close()
+  fmt.Fprintf(os.Stderr, "swank conn from %s\n", conn.RemoteAddr())
 
   env := lib.BaseEnv()
   if err := lib.LoadStdlib(env); err != nil {
@@ -55,6 +56,7 @@ func handleConn(conn net.Conn) {
   for {
     msg, err := readFrame(conn)
     if err != nil {
+      fmt.Fprintf(os.Stderr, "swank read error from %s: %v\n", conn.RemoteAddr(), err)
       return
     }
     events, err := HandleMessage(env, msg)
@@ -64,6 +66,7 @@ func handleConn(conn net.Conn) {
     }
     for _, event := range lib.CellToSlice(events) {
       if err := writeFrame(conn, event); err != nil {
+        fmt.Fprintf(os.Stderr, "swank write error: %v\n", err)
         return
       }
     }
