@@ -19,6 +19,7 @@ import (
 	"unsafe"
 
 	"golisp/lib"
+	"golisp/lib/swank"
 )
 
 func test(env *lib.Env, s string) {
@@ -262,6 +263,7 @@ func main() {
 	interactiveFlag := flag.Bool("i", false, "Interaktiver REPL-Modus")
 	exprFlag := flag.String("e", "", "Expression direkt ausführen")
 	testFlag := flag.Bool("t", false, "Tests ausführen")
+	swankFlag := flag.String("swank", "", "SWANK-Server starten (Format: host:port, z.B. 127.0.0.1:4005)")
 
 	flag.Parse()
 
@@ -272,6 +274,19 @@ func main() {
 	if err := lib.LoadStdlib(env); err != nil {
 		fmt.Fprintln(os.Stderr, "stdlib Fehler:", err)
 		os.Exit(1)
+	}
+
+	// SWANK-Server Modus: golisp --swank [host:port]
+	if *swankFlag != "" {
+		addr := *swankFlag
+		if !strings.Contains(addr, ":") {
+			addr = "127.0.0.1:" + addr
+		}
+		if err := swank.RunServer(addr); err != nil {
+			fmt.Fprintln(os.Stderr, "swank server error:", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
 	}
 
 	// Testmodus: golisp -t
