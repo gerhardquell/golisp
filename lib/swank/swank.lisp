@@ -30,9 +30,9 @@
       ((equal? op 'swank:init-presentations)
        (swank:ok-nil id))
       ((equal? op 'swank:autodoc)
-       ;; SLIME: (unless (eq doc :not-available) ...). Kein Arglist
-       ;; verfuegbar -> :not-available, Formatierung/insert uebersprungen.
-       (list (list :return (list :ok (list :not-available nil)) id)))
+       (swank:autodoc form id))
+      ((equal? op 'swank:operator-arglist)
+       (swank:operator-arglist (cadr form) id))
       ;; swank-repl contrib nutzt eigenes Package-Prefix
       ((equal? op 'swank-repl:create-repl)
        (swank:create-repl id))
@@ -114,6 +114,24 @@
   (if (null? lst)
       acc
       (swank--wrap-each (cdr lst) (append acc (list (list (car lst)))))))
+
+;; swank:operator-arglist (name pkg) -> (:ok "(name args)") | (:ok ()).
+;; C-c C-d C-a / company-docsig.
+(defun swank:operator-arglist (name id)
+  (let ((al (swank--arglist name)))
+    (list (list :return (list :ok al) id))))
+
+;; swank:autodoc (raw-form :print-right-margin N) -> (:ok (string cache-p)).
+;; Vereinfacht: Operator aus raw-form, Arglist zeigen (ohne Highlighting
+;; des aktuellen Args). Built-in FUNC -> :not-available.
+(defun swank:autodoc (form id)
+  (let* ((quoted (cadr form))
+         (rawform (cadr quoted))
+         (op (car rawform)))
+    (let ((al (swank--arglist op)))
+      (if (null? al)
+          (list (list :return (list :ok (list :not-available nil)) id))
+          (list (list :return (list :ok (list al nil)) id))))))
 
 ;; swank:load-file (filename) -> (:ok "<result>"). C-c C-l in Emacs.
 ;; Nutzt GoLisp load-Spezialform.

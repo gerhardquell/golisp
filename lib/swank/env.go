@@ -68,6 +68,40 @@ func RegisterSwankEnv(env *lib.Env, send func(*lib.Cell) error) {
     }
     return lib.SliceToCell(cells), nil
   }))
+
+  // swank--arglist: (name) -> "(name p1 p2 ...)" oder NIL.
+  // Nutzt Lambda-Struktur (Type:LIST mit Env) bzw. Macro (Type:MACRO),
+  // deren Car die Parameterliste. Built-in FUNC hat keine Arglist -> NIL.
+  env.Set("swank--arglist", makeFn(func(args []*lib.Cell) (*lib.Cell, error) {
+    if len(args) < 1 {
+      return lib.MakeNil(), nil
+    }
+    name := args[0].Val
+    cell, err := env.Get(name)
+    if err != nil {
+      return lib.MakeNil(), nil
+    }
+    var params *lib.Cell
+    switch {
+    case cell.Type == lib.LIST && cell.Env != nil: // Lambda/Closure
+      params = cell.Car
+    case cell.Type == lib.MACRO:
+      params = cell.Car
+    default: // FUNC, ATOM, NUMBER, STRING, NIL
+      return lib.MakeNil(), nil
+    }
+    var b strings.Builder
+    b.WriteString("(")
+    b.WriteString(name)
+    for p := params; p != nil && p.Type == lib.LIST; p = p.Cdr {
+      if p.Car != nil {
+        b.WriteString(" ")
+        b.WriteString(p.Car.String())
+      }
+    }
+    b.WriteString(")")
+    return lib.MakeStr(b.String()), nil
+  }))
 }
 
 func makeFn(f func([]*lib.Cell) (*lib.Cell, error)) *lib.Cell {
