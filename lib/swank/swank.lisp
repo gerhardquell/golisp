@@ -40,6 +40,8 @@
        (swank:listener-eval (cadr form) id))
       ((equal? op 'swank:simple-completions)
        (swank:simple-completions (cadr form) id))
+      ((equal? op 'swank:completions)
+       (swank:completions (cadr form) id))
       ;; Legacy-Prefix (Manuelle Tests)
       ((equal? op 'swank:create-repl)
        (swank:create-repl id))
@@ -98,6 +100,18 @@
   (if (> (string-length prefix) (string-length s))
       ()
       (equal? prefix (substring s 0 (string-length prefix)))))
+
+;; swank:completions (prefix pkg) -> (:ok ((name) (name)...)).
+;; swank-c-p-c Contrib: Client destrukturiert (symbol-name classification
+;; symbol) pro Element; fehlende = nil. Also 1-Element-Liste pro Match.
+(defun swank:completions (prefix id)
+  (let ((matches (swank--filter-prefix prefix (swank--symbols) (list))))
+    (list (list :return (list :ok (swank--wrap-each matches (list))) id))))
+
+(defun swank--wrap-each (lst acc)
+  (if (null? lst)
+      acc
+      (swank--wrap-each (cdr lst) (append acc (list (list (car lst)))))))
 
 (defun swank:listener-eval (string id)
   (catch
