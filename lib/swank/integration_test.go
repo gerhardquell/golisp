@@ -11,6 +11,7 @@
 package swank
 
 import (
+  "bufio"
   "net"
   "strings"
   "testing"
@@ -55,7 +56,7 @@ func TestSwankServerConnectionInfo(t *testing.T) {
   // Set read deadline to avoid hanging
   conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 
-  resp, err := readFrame(conn)
+  resp, err := readFrame(bufio.NewReader(conn))
   if err != nil {
     t.Fatalf("readFrame: %v", err)
   }

@@ -21,8 +21,10 @@ import (
 
 // readFrame reads one SWANK length-prefixed S-expression.
 // Format: 6-digit hex length followed immediately by the S-expression.
-func readFrame(r io.Reader) (*lib.Cell, error) {
-  br := bufio.NewReader(r)
+// br MUST be a persistent *bufio.Reader for the connection — creating a
+// fresh bufio.Reader per call would discard buffered bytes from pipelined
+// frames and lose them.
+func readFrame(br *bufio.Reader) (*lib.Cell, error) {
   lenBuf := make([]byte, 6)
   if _, err := io.ReadFull(br, lenBuf); err != nil {
     return nil, fmt.Errorf("readFrame: %w", err)

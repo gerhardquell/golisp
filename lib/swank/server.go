@@ -11,6 +11,7 @@
 package swank
 
 import (
+  "bufio"
   "fmt"
   "net"
   "os"
@@ -53,8 +54,9 @@ func handleConn(conn net.Conn) {
     return
   }
 
+  br := bufio.NewReader(conn)
   for {
-    msg, err := readFrame(conn)
+    msg, err := readFrame(br)
     if err != nil {
       fmt.Fprintf(os.Stderr, "swank read error from %s: %v\n", conn.RemoteAddr(), err)
       return

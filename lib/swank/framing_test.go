@@ -11,6 +11,7 @@
 package swank
 
 import (
+  "bufio"
   "bytes"
   "strings"
   "testing"
@@ -33,7 +34,7 @@ func TestWriteFrame(t *testing.T) {
 
 func TestReadFrame(t *testing.T) {
   input := "000008(foo 42)(foo 42)"
-  r := strings.NewReader(input)
+  r := bufio.NewReader(strings.NewReader(input))
   cell, err := readFrame(r)
   if err != nil {
     t.Fatalf("readFrame failed: %v", err)
