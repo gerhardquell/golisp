@@ -32,6 +32,18 @@ func (e *Env) Set(name string, val *Cell) {
   e.vars[name] = val
 }
 
+// Root liefert die aeusserste Umgebung (Globalenv). Common-Lisp-Semantik
+// fuer (eval form): Auswertung im globalen Environment, unabhaengig vom
+// dynamischen Lambda-Scope. Ohne dies wuerde (defun ...) aus einem
+// REPL-Eval heraus lokal im Child-Env definiert und ginge verloren.
+func (e *Env) Root() *Env {
+  cur := e
+  for cur.parent != nil {
+    cur = cur.parent
+  }
+  return cur
+}
+
 // Symbols sammelt alle bekannten Namen (inkl. äußere Scopes, ohne Duplikate)
 func (e *Env) Symbols() []string {
   seen := make(map[string]bool)

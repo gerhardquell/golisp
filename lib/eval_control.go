@@ -95,8 +95,11 @@ func evalEval(args *Cell, env *Env) (*Cell, error) {
   // Argument erst auswerten (z.B. Variable oder read-Ergebnis)
   expr, err := Eval(args.Car, env)
   if err != nil { return nil, err }
-  // dann nochmal auswerten
-  return Eval(expr, env)
+  // dann nochmal auswerten — im globalen Environment (Common-Lisp-Semantik).
+  // So bleiben Definitionen aus (eval (read ...)) global sichtbar, was
+  // fuer REPL (swank:listener-eval) und das selbsterweiternde Muster
+  // essenziell ist.
+  return Eval(expr, env.Root())
 }
 
 // blockReturn: Sentinel-Fehler für (return-from name value)
