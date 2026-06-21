@@ -34,9 +34,13 @@ golisp/
     sigorest.go        sigo, sigo-models, sigo-host (HTTP zu sigoREST)
     readline.go        REPL: go-prompt, Syntax-Highlighting, History, Multiline
     env_test.go        Go-Tests für Env.Symbols()
-    swank/             SWANK-ähnlicher Server
-      server.go        TCP-Listener, Connection Handling
-      protocol.go      Request Routing, Method Handlers
+    swank/             SWANK-Server für Emacs/SLIME
+      server.go        TCP-Listener, per-Connection Handling
+      framing.go       Length-prefixed Framing (readFrame/writeFrame)
+      dispatch.go      (swank-dispatch msg) Wrapper
+      env.go           per-Connection Primitives (send-event, value-string)
+      lisp.go          //go:embed swank.lisp, LoadSwankLisp
+      swank.lisp       Semantische Handler (connection-info, listener-eval …)
 ```
 
 ---
@@ -47,7 +51,7 @@ golisp/
 - **Einrückung:** 2 Spaces, keine Tabs
 - **Dateinamen:** camelCase (außer main.go)
 - **Kommentare:** sparsam, sprechende Namen bevorzugt
-- **Dateigröße:** max 300 Zeilen, ab 500 aufteilen
+- **Dateigröße:** max 1000 Zeilen, ab 800 sinnvoll aufteilen
 - **Datei-Header:** immer mit Autor, CoAutor, Copyright, Erstellt (YYYYMMDD)
 - **Fehler:** `fmt.Errorf("funktionsname: beschreibung")`
 
@@ -87,6 +91,13 @@ type Cell struct {
 Lambda-Calls und alle Tail-Spezialformen (`if`, `begin`, `let`, `cond`)
 setzen `expr`/`env` und machen `continue` im `for {}`-Loop — kein neuer
 Stack-Frame, O(1) Stack für beliebig tiefe Tail-Rekursion.
+
+### `(eval form)` – globales Environment
+`(eval form)` wertet im **globalen** Environment aus (`Env.Root()`),
+nicht im dynamischen Lambda-Scope — Common-Lisp-Semantik. Notwendig,
+damit Definitionen aus `(eval (read ...))` (REPL `swank:listener-eval`,
+selbsterweiterndes Muster) global sichtbar bleiben und nicht im
+Child-Env der aufrufenden Lambda-Kette verloren gehen.
 
 ### Lambda-Struktur
 ```go
@@ -146,6 +157,7 @@ GoLisp verhält sich wie ein typisches Unix-Tool:
 | `-i` | Interaktiver REPL mit go-prompt | `./golisp -i` |
 | `-e EXPR` | Expression direkt ausführen | `./golisp -e "(* 6 7)"` |
 | `-t` | Tests ausführen | `./golisp -t` |
+| `--swank HOST:PORT` | SWANK-Server starten (für Emacs/SLIME) | `./golisp --swank 127.0.0.1:4242` |
 | `DATEI` | Lisp-Datei laden | `./golisp script.lisp` |
 
 ### Exit-Codes
@@ -269,6 +281,68 @@ golisp> :quit
 go build -o /usr/local/bin/golispd ./cmd/golispd/
 go build -o /usr/local/bin/golisp-client ./cmd/golisp-client/
 ```
+
+---
+
+## SWANK-Server für Emacs/SLIME (`golisp --swank`)
+
+Echte SWANK-Protokoll-Implementierung in `lib/swank/` — spricht das
+SLIME-Protokoll direkt, so dass `M-x slime-connect` aus Emacs klappt.
+(Unabhängig vom oben beschriebenen `golispd` Custom-RPC.)
+
+### Start
+
+```bash
+./golisp --swank 127.0.0.1:4242
+```
+
+Dann in Emacs (SLIME geladen via quicklisp `slime-helper.el`):
+
+```
+M-x slime-connect  →  Host: 127.0.0.1  →  Port: 4242  →  y (Versionswarnung)
+```
+
+REPL `*slime-repl USER*` öffnet sich, Definitionen halten, Rekursion klappt.
+Status: 2026-06-21 getestet mit SLIME v2.32.
+
+### Architektur (hybrid: Go + GoLisp)
+
+| Datei | Aufgabe |
+|-------|---------|
+| `lib/swank/server.go` | TCP-Listener, per-Connection `bufio.Reader`, Env-Setup |
+| `lib/swank/framing.go` | Length-prefixed Framing `%06x<sexpr>` (readFrame nimmt persistenten `*bufio.Reader` — pipelining-safe) |
+| `lib/swank/dispatch.go` | `(swank-dispatch (quote msg))` aufrufen |
+| `lib/swank/env.go` | per-Connection Primitives: `swank-send-event`, `swank-print`, `swank-println`, `swank--value-string` |
+| `lib/swank/swank.lisp` | Semantische Handler (Lisp-Seite, via `//go:embed`) |
+
+### Implementierte SLIME-Methoden
+
+| Op | Verhalten |
+|----|-----------|
+| `swank:connection-info` | Implementation-Info `(:type "GoLisp" :version "0.2" :style :spawn)` |
+| `swank:swank-require` | Stub `(:ok ())` — keine Contribs geladen |
+| `swank:init-presentations` | Stub `(:ok ())` |
+| `swank-repl:create-repl` | `(:ok ("USER" "USER"))` + `:new-package` |
+| `swank-repl:listener-eval` | Eval-Code → `(:write-string "<wert>\n" :repl-result)` + `(:ok nil)` |
+| `swank:autodoc` | `(:ok (:not-available nil))` — keine Arglist-Anzeige |
+| sonstige | graceful `(:ok ())` statt `:abort` (SLIME-Contribs degradieren sauber) |
+
+### Wichtigste Protokoll-Details
+
+- **`listener-eval`-Return:** `:write-string` mit `:repl-result`-Tag senden,
+  dann `(:ok nil)`. Nicht `(:ok "<string>")` — SLIME destrukturiert `:ok` als
+  Liste.
+- **`autodoc`:** `(:not-available nil)` statt `nil` — sonst `insert nil`-
+  Error in `slime-autodoc--format`.
+- **eval global:** `listener-eval` nutzt `(eval (read string))`; damit
+  `defun` global persistiert, wertet `eval` im `Env.Root()` (siehe oben).
+- **Eine Form pro String:** `listener-eval` liest derzeit nur die erste Form
+  via `(read string)`. Mehrere Formen pro Eingabe noch offen.
+
+### Offen für volle SLIME-Integration
+
+`complete-symbol` (Tab-Completion), `describe-symbol`,
+`arglist-for-echo-area`, `macroexpand`, `compile-string`, `load-file`.
 
 ---
 
