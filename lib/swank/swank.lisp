@@ -25,12 +25,33 @@
     (cond
       ((equal? op 'swank:connection-info)
        (swank:connection-info id))
+      ((equal? op 'swank:swank-require)
+       (swank:swank-require id))
+      ((equal? op 'swank:init-presentations)
+       (swank:ok-nil id))
+      ((equal? op 'swank:autodoc)
+       ;; SLIME: (unless (eq doc :not-available) ...). Kein Arglist
+       ;; verfuegbar -> :not-available, Formatierung/insert uebersprungen.
+       (list (list :return (list :ok (list :not-available nil)) id)))
+      ;; swank-repl contrib nutzt eigenes Package-Prefix
+      ((equal? op 'swank-repl:create-repl)
+       (swank:create-repl id))
+      ((equal? op 'swank-repl:listener-eval)
+       (swank:listener-eval (cadr form) id))
+      ;; Legacy-Prefix (Manuelle Tests)
       ((equal? op 'swank:create-repl)
        (swank:create-repl id))
       ((equal? op 'swank:listener-eval)
        (swank:listener-eval (cadr form) id))
+      ;; Unbekannte Ops: graceful leere Liste statt :abort. SLIME-Contribs
+      ;; degradieren sauber; :abort wuerfe Sync-Eval-Fehler in Emacs.
       (else
-       (list (list :return (list :abort (string-append "unknown op: " (swank--value-string op))) id))))))
+       (swank:ok-nil id)))))
+
+;; Generic OK-Stub: liefert echte leere Liste () als :ok-Wert.
+;; Viele SLIME-Ops (autodoc, init-*) erwarten Liste, kein String.
+(defun swank:ok-nil (id)
+  (list (list :return (list :ok (list)) id)))
 
 (defun swank:connection-info (id)
   (list (list :return
@@ -51,10 +72,18 @@
   (list (list :return (list :ok (list "USER" "USER")) id)
         (list :new-package "USER" "USER")))
 
+;; Stub: keine Contribs implementiert. SLIME akzeptiert leere Liste
+;; (geladene Module), Connect laeuft durch.
+(defun swank:swank-require (id)
+  (list (list :return (list :ok (list)) id)))
+
 (defun swank:listener-eval (string id)
   (catch
     (let ((expr (read string)))
       (let ((result (eval expr)))
-        (list (list :return (list :ok (swank--value-string result)) id))))
+        (list (list :write-string
+                    (string-append (swank--value-string result) "\n")
+                    :repl-result)
+              (list :return (list :ok (list)) id))))
     (lambda (err)
-      (list (list :return (list :abort err) id)))))
+      (list (list :return (list :abort (swank--value-string err)) id)))))
