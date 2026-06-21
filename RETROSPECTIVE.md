@@ -1333,3 +1333,140 @@ sigoREST, striktere Typisierung, sauberer Reader.
 > "Ein Tag der das System nicht funktional erweiterte, aber strukturell
 >  heilte. Manchmal ist Aufräumen die wertvollste Feature-Arbeit."
 > — Gerhard & Claude, Juni 2026
+
+---
+
+# Session 12 – 2026-06-21: SWANK/SLIME-Integration zum Laufen gebracht
+
+## Ziel
+
+Todo #1 validieren: Der in Session- predecessors gebaute Swank-Server
+(`lib/swank/`, Commits 116f28b / 7aa8c8d) war nie gegen echte Emacs-SLIME-
+Session getestet. Ziel: `slime-connect` funktioniert, REPL evaluiert.
+
+## Was haben wir gebaut / gefixt?
+
+Drei Commits, sechs behobene Probleme, iterativ gegen SLIME v2.32
+(via quicklisp) erarbeitet.
+
+| Commit | Inhalt |
+|--------|--------|
+| `6bd171d` | fix(swank): persistenter `bufio.Reader` pro Connection — Pipelining-Bug |
+| `f499ce0` | fix(eval): `(eval form)` im globalen Env (CL-Semantik) — sonst `defun` aus REPL verloren |
+| `f1e6638` | feat(swank): SLIME-kompatible Handler |
+
+Behobene Probleme in Reihenfolge des Auftretens:
+
+1. **bufio-Pipelining-Bug.** `readFrame` erzeugte pro Call neuen
+   `bufio.Reader`; vorausgelesene Frame-Bytes wurden mit dem verworfenen
+   Reader gelöscht. Schon beim Code-Lesen als Verdacht notiert, dann mit
+   3 gepipelinten Frames bewiesen (1/3 Responses → 3/3 nach Fix).
+2. **`swank-repl:`-Prefix fehlt.** SLIME sendet `swank-repl:create-repl` /
+   `swank-repl:listener-eval`, nicht `swank:`. Bestehende Handler matchten
+   nie. Erst durch `>>`/`<<`-Server-Trace sichtbar.
+3. **`:abort` auf unbekannte Ops.** Default-Fall warf `:abort` → "Synchronous
+   Lisp Evaluation aborted". SLIME-Contribs rufen beim Connect diverse
+   Init-Funktionen. Fix: graceful `(:ok ())`.
+4. **`listener-eval` Return-Format.** `(:ok "54")` (String) → SLIME will
+   Liste → `listp`-Error. Richtig: `(:write-string "<wert>\n" :repl-result)`
+   + `(:ok nil)`. Aus `swank-repl.lisp` `send-repl-results-to-emacs`
+   abgelesen.
+5. **`autodoc` destructure.** SLIME `(cl-destructuring-bind (doc
+   &optional cache-p) doc)`. Leere Liste → 0 Args. `(:ok (nil nil))` →
+   `doc=nil` → `insert nil` → `char-or-string-p`. Endgültig
+   `(:ok (:not-available nil))` — das Keyword, das SLIME explizit abfragt.
+6. **`defun` verschwindet.** `(fib 3)` nach `(defun fib ...)` → "unbekannt
+   Symbol". `(eval form)` nutzte dynamisches Env; in der Lambda-Kette
+   `swank-dispatch → handle-emacs-rex → listener-eval` ist das ein Child-Env,
+   `defun` definierte lokal. Fix: `Env.Root()`, CL-Semantik. Core-Change.
+
+## Was lief gut?
+
+- **Iterativ gegen das echte System.** Sechs Iterationen je eine Code-
+  Änderung + Reconnect. Jede SLIME-Fehlermeldung war präziser Fingerzeig.
+  Schneller als jede Voraus-Planung.
+- **Verdacht先行 (suspicion-first).** bufio-Bug schon beim ersten Lesen von
+  `framing.go` vermutet, explizit getestet — nicht erst auf Symptom gewartet.
+  5 min vom Verdacht zum Beweis.
+- **Gegenseite lesen.** Statt Protokoll zu raten, in `swank-repl.lisp` und
+  `slime-autodoc.el` gelesen, was SLIME tatsächlich destrukturiert. Ein
+  `cl-destructuring-bind` löste Iteration 5 sofort. Mehr wert als jede Spec.
+- **双向 Trace früh.** Go-Errors sahen still aus; Lisp-seitige `:abort`-
+  Returns standen nicht im Log. `>>`/`<<`-Trace eingebaut → sah sofort welche
+  Ops reinkamen. Decisive für Iteration 2-5. (Leider erst Iteration 2, nicht
+  1 — siehe unten.)
+- **Core vs. swank im Commit getrennt.** eval-Global-Semantik ist core
+  change, eigener Commit mit eigener Begründung. Nicht im swank-Commit
+  versteckt.
+
+## Was nicht lief / Verbesserungspotenzial
+
+- **Synthetischer Testclient zu naiv.** Erste `swankc2.go` las 1 Response
+  pro Message, aber `create-repl` sendet 2 Events. Output-Verschiebung sah
+  aus wie Server-Bug, war Client-Bug. Verwirrend, bis pipelined Test den
+  echten Bug zeigte.
+- **Klammerfehler im Lisp-Edit.** Eine Edit ließ `handle-emacs-rex`-Defun
+  offen → Tests rot ("fehlendes )"). Go-Tests fingen's sofort, aber: GoLisp
+  hat keinen Inline-Balancing-Check; `go test` nach jeder Lisp-Edit ist der
+  einzige Rettungsanker. Fehleranfällig.
+- **Trace zu spät.** Erst in Iteration 2 eingebaut. Hätte von Anfang an
+  sein sollen — Iteration 1 war im Dunkeln.
+- **Sandbox vs. Background-Prozesse.** `&`-Jobs wurden vom Harness-Wrapper
+  gekillt (Exit 144). Mehrere Anläufe bis `run_in_background: true`
+  zuverlässig lief. Zeit am Tooling statt am Fachproblem.
+- **Punkt 6 spät erkannt.** Dass `defun` nicht persistiert, zeigte sich
+  erst als der REPL scheinbar funktionierte. Synthetische Tests prüften nur
+  Einzelexpr, nicht `defun` + späteren Call über dieselbe Connection.
+
+## Schlüssel-Erkenntnisse
+
+1. **Gegenseite lesen, nicht raten.** Bei Protokoll-Integration den Client-
+   Source lesen. `cl-destructuring-bind` und `send-repl-results-to-emacs`
+   sagen mehr als jede Spec.
+2. **Verdacht → Test → Fix.** Beim Code-Lesen gefundene Bug-Verdachte direkt
+   testen. bufio-Bug in 5 min bewiesen statt 5 Iterationen symptomgetrieben.
+3. **Trace früh,双向.** RPC-Systeme brauchen in+out-Trace ab Iteration 1,
+   nicht ab Iteration 2. Billig einzubauen, unbezahlbar im Debugging.
+4. **Integrationstests testen mehr als die Integration.** Punkt 6 (eval-Env)
+   ist ein core-Semantik-Bug, der nur durch den REPL-Integrationstest
+   sichtbar wurde. Protokoll-Tests sind core-Tests in Verkleidung.
+5. **Synthetische Tests müssen echtes Verhalten modellieren.** Pipelining,
+   Multi-Event-Responses, zustandsbehaftete Connections — sonst testen sie
+   nicht was SLIME tut.
+6. **CL-Semantik als Kompass.** Wenn GoLisp-Verhalten unklar ist, sagt
+   Common-Lisp-Spezifikation was richtig ist (`eval` global). Hat Punkt 6
+   sofort auf die Lösung gelenkt.
+
+## IST-Funde (Session 12)
+
+- `Env.Set` schreibt nur lokal — kein Walk-up. `defun`/`define`/`setq` sind
+  in Lambda-Bodies lokal, nicht global. Per Design, aber CL-unüblich.
+  Komplett global machen würde `let`-lokale Defines brechen. Status: nur
+  `eval` geht über Root, `defun` direkt bleibt lokal. Bewusst so belassen.
+
+## Offene Punkte (nach dieser Session)
+
+- Weitere SWANK-Methoden: `complete-symbol` (Tab-Completion),
+  `describe-symbol` / `arglist-for-echo-area`, `macroexpand`,
+  `compile-string`, `load-file`.
+- `listener-eval`: mehrere Formen pro String (derzeit nur erste via `read`).
+- slime-tramp für Emacs (Todo #2).
+- CLAUDE.md um eval-Global-Semantik + swank-REPL-Status ergänzen.
+- GoLisp-Lisp-Edits ohne Balancing-Check bleiben fehleranfällig — evtl.
+  Reader-Warnung bei unausgeglichenen Klammern in `load`/`read`.
+
+## Fazit Session 12
+
+Vom "MVP steht aber ungetestet" zum "REPL mit Output, Rekursion und
+persistierenden Definitionen" in einer Session. Sechs Iterationen, drei
+Commits, davon ein core-Semantik-Fix der nur durch den Integrationstest
+sichtbar wurde. Der Swank-Server ist jetzt eine echte Emacs-Entwicklungsum-
+gebung für GoLisp — nicht mehr nur Gerüst.
+
+Lehrreichster Moment: dass der scheinbare Protokoll-Bug (`defun` verschwindet)
+ein core-eval-Bug war. Integrationstests sind core-Tests in Verkleidung.
+
+> "Sechs Iterationen gegen das echte System — jede SLIME-Fehlermeldung ein
+>  präziserer Lehrer als jede Spec. Am Ende war der letzte Bug kein
+>  swank-Bug, sondern ein core-Bug, den nur der REPL-Test aufdeckte."
+> — Gerhard & Claude, 21. Juni 2026
