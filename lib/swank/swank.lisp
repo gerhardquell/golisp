@@ -38,6 +38,8 @@
        (swank:create-repl id))
       ((equal? op 'swank-repl:listener-eval)
        (swank:listener-eval (cadr form) id))
+      ((equal? op 'swank:simple-completions)
+       (swank:simple-completions (cadr form) id))
       ;; Legacy-Prefix (Manuelle Tests)
       ((equal? op 'swank:create-repl)
        (swank:create-repl id))
@@ -76,6 +78,26 @@
 ;; (geladene Module), Connect laeuft durch.
 (defun swank:swank-require (id)
   (list (list :return (list :ok (list)) id)))
+
+;; swank:simple-completions (prefix pkg) -> (:ok (matching-strings...)).
+;; SLIME nutzt completion-table-dynamic, erwartet Liste von Strings.
+(defun swank:simple-completions (prefix id)
+  (let ((matches (swank--filter-prefix prefix (swank--symbols) (list))))
+    (list (list :return (list :ok matches) id))))
+
+(defun swank--filter-prefix (prefix syms acc)
+  (if (null? syms)
+      acc
+      (let ((s (car syms)))
+        (swank--filter-prefix
+          prefix
+          (cdr syms)
+          (if (swank--prefix? prefix s) (append acc (list s)) acc)))))
+
+(defun swank--prefix? (prefix s)
+  (if (> (string-length prefix) (string-length s))
+      ()
+      (equal? prefix (substring s 0 (string-length prefix)))))
 
 (defun swank:listener-eval (string id)
   (catch

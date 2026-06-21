@@ -57,6 +57,17 @@ func RegisterSwankEnv(env *lib.Env, send func(*lib.Cell) error) {
     }
     return lib.ReadAll(args[0].Val)
   }))
+
+  // swank--symbols: Liste aller Symbolnamen im Env (inkl. äußere Scopes).
+  // Für swank:simple-completions (Tab-Completion).
+  env.Set("swank--symbols", makeFn(func(args []*lib.Cell) (*lib.Cell, error) {
+    names := env.Symbols()
+    cells := make([]*lib.Cell, len(names))
+    for i, n := range names {
+      cells[i] = lib.MakeStr(n)
+    }
+    return lib.SliceToCell(cells), nil
+  }))
 }
 
 func makeFn(f func([]*lib.Cell) (*lib.Cell, error)) *lib.Cell {
