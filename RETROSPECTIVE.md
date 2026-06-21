@@ -1470,3 +1470,127 @@ ein core-eval-Bug war. Integrationstests sind core-Tests in Verkleidung.
 >  präziserer Lehrer als jede Spec. Am Ende war der letzte Bug kein
 >  swank-Bug, sondern ein core-Bug, den nur der REPL-Test aufdeckte."
 > — Gerhard & Claude, 21. Juni 2026
+
+---
+
+# Session 13 – 2026-06-21: SWANK-Methoden ausbauen
+
+## Ziel
+
+Auf der funktionierenden SLIME-REPL-Verbindung (Session 12) die fehlenden
+SWANK-Methoden nachrüsten, die Emacs/SLIME zum produktiven Lisp-IDE machen.
+
+## Was haben wir gebaut?
+
+Sieben Commits, je eine SWANK-Methode + ein core-Bugfix. Alle iterativ
+gegen echte SLIME-Session validiert.
+
+| Commit | Methode / Fix |
+|--------|---------------|
+| `0f8ce36` | listener-eval wertet mehrere Formen pro Eingabe |
+| `b963da2` | swank:simple-completions (Tab, Basis) |
+| `a6ac75f` | swank:completions (Tab, c-p-c Contrib — das echte Op) |
+| `d9e60ac` | swank:load-file (C-c C-l) |
+| `a3a2b9d` | swank:operator-arglist + autodoc (Lambda-Parameter) |
+| `0409a70` | swank-macroexpand-1/full/all + evalMacroexpand-Bugfix |
+| `333bb6b` | swank:swank-expand-1/-expand (das Op das C-c C-m wirklich sendet) |
+
+Neue Funktionalität:
+- **Multi-Form listener-eval:** `ReadAll` in reader.go liest alle Formen,
+  swank--read-all Primitive, listener-eval evaluiert jede Form, sendet
+  pro Ergebnis `:write-string`/`:repl-result`.
+- **Tab-Completion:** swank--symbols Primitive (closert über Connection-
+  Env), Prefix-Filter. Wichtig: SLIME nutzt defaultmäßig die c-p-c Contrib
+  und sendet `swank:completions` (nicht `simple-completions`) — Liste von
+  1-Element-Listen, Client destrukturiert `(symbol-name classification sym)`.
+- **load-file:** `(load filename)` über GoLisp load-Spezialform.
+- **Arglist:** swank--arglist Primitive nutzt Lambda-Struktur (Type:LIST
+  mit Env!=nil) bzw. Macro, Car = Parameter. autodoc extrahiert Operator
+  aus raw-form. Built-in FUNC → `:not-available`.
+- **macroexpand:** GoLisp macroexpand-Spezialform. `-1` einmal, `-full`
+  wiederholt bis stabil.
+
+## Was lief gut?
+
+- **Gegenseite lesen, konsequent.** Bei jeder Methode erst in slime.el /
+  swank.lisp / contrib-Files nachgeschaut, welches Op SLIME sendet und
+  welches Return-Format der Client destrukturiert. Hat gleich DREI Ops
+  entdeckt die nicht das waren was man naiv annimmt: `simple-completions`
+  vs `completions` (c-p-c), `swank-macroexpand-1` vs `swank-expand-1`.
+- **Live-Trace als Diagnose.** Bei "Tab klappt nicht" und "macroexpand
+  char-or-string-p" den `>>`-Trace reaktiviert → sah sofort welches Op
+  SLIME wirklich sendet. Zweimal gerettet, jeweils 1 Iteration.
+- **Core-Bugs durch Integrationstests aufgedeckt.** evalMacroexpand warf
+  Fehler auf Specialform-Car (`begin`) — erst beim wiederholten Expand
+  sichtbar. Wieder: Protokoll-Test = core-Test in Verkleidung.
+- **Pro Methode ein Commit, sofort gegen SLIME validiert.** Kein
+  Feature-Stau; jede Einheit lebend getestet bevor nächste.
+
+## Was nicht lief / Verbesserungspotenzial
+
+- **Naive Annahme des Op-Namens.** `simple-completions` implementiert,
+  dann in Emacs getestet — nichts. Trace zeigte `completions`. Hätte
+  vorher die Contrib-Liste aus swank-require lesen können (stand im Log
+  von Session 12). Lehre: die angeforderten Contribs verraten welche
+  Ops kommen.
+- **Synthetischer Testclient desync.** Mehrfach: client las feste Frame-
+  Anzahl, aber listener-eval sendet N+1 (N writes + return). Output-
+  Verschiebung sah nach Server-Bug aus. Drain-until-return als Muster
+  erst spät konsequent angewandt.
+- **macroexpand-all ist nur Top-Level-wiederholt.** Subformen werden
+  nicht rekursiv expandiert. v1-Limitation, dokumentiert, aber nicht
+  vollwertig.
+- **Cursor-Semantik-Falle.** C-c C-m griff nur Symbol wenn Cursor auf
+  Symbol — SLIME-Standard, aber verwirrend. Kein Bug, aber Erklärungs-
+  bedarf gegenüber dem Nutzer.
+
+## Schlüssel-Erkenntnisse
+
+1. **Angeforderte Contribs = Ops-Vorhersage.** swank-require lief die
+   Liste (swank-c-p-c, swank-arglists, ...) — daraus lassen sich die
+   kommenden Ops ableiten, statt blind zu implementieren was die Spec
+   nennt.
+2. **Return-Format aus Client-Quellcode, nicht Spec.** `cl-destructuring-
+   bind (doc &optional cache-p)`, `slime-format-completions` Loop, 
+   `apply-macro-expander` mit `prin1-to-string` — der Client-Code ist
+   die wahrheitsgemäße Spec.
+3. **Trace ist billig, Unterlassung teuer.** Zwei Debug-Iterationen
+   dieses Mal durch späten Trace-Einsatz. Bei RPC-Integration Trace
+   ab Iteration 1.
+4. **Lambda-Struktur als Reflexionsquelle.** Type:LIST + Env!=nil
+   identifiziert Closures; Car = Parameter. Keine separate Metadaten-
+   Tabelle nötig für Arglist. GoLisp's Zell-basierte Repräsentation
+   ist hierFeature.
+5. **`else → :ok ()` graceful ist zweischneidig.** Hat viele Contrib-
+   Init-Calls geschluckt, aber bei Ops die String erwarten (expand-1)
+   zum `insert nil`-Error geführt. Besser: bekannte Ops explizit
+   handhaben, else bleibt graceful.
+
+## IST-Funde (Session 13)
+
+- `evalMacroexpand`: Lookup von form.Car warf Fehler bei Specialform/
+  ungebundenem Symbol. Behoben (Lookup-Fehler = nicht expandierbar).
+  Entspricht CL-Semantik.
+- GoLisp reader: `ReadAll` neu (vorher nur `Read` für eine Form).
+- `append`-Primitive fehlte (helper existierte, war nicht exposed).
+
+## Offene Punkte (nach dieser Session)
+
+- `describe-symbol` (C-c C-d C-d) — GoLisp ohne Docstrings, geringe
+  Substanz.
+- Echtes `macroexpand-all` (rekursiv in Subformen).
+- `compile-string` / `compile-file-for-emacs` (C-c C-k).
+- slime-tramp (TODO #2).
+- v1-Swank-Methoden in CLAUDE.md dokumentieren (mit gemacht).
+
+## Fazit Session 13
+
+Sieben Methoden, sieben Commits, eine funktionierende SLIME-IDE.
+Tab-Completion, load-file, Arglist-Anzeige, macroexpand — das was einen
+Lisp-REPL von "funktioniert" zu "produktiv" macht. Wieder war der
+wiederkehrende Lehrer: nicht raten was SLIME will, sondern lesen was
+SLIME sendet und destrukturiert.
+
+> "Sieben Methoden, siebenmal in den Client-Code geschaut statt in die
+>  Spec. Der Client-Code lügt nicht — die Spec manchmal schon."
+> — Gerhard & Claude, 21. Juni 2026

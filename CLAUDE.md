@@ -323,8 +323,14 @@ Status: 2026-06-21 getestet mit SLIME v2.32.
 | `swank:swank-require` | Stub `(:ok ())` — keine Contribs geladen |
 | `swank:init-presentations` | Stub `(:ok ())` |
 | `swank-repl:create-repl` | `(:ok ("USER" "USER"))` + `:new-package` |
-| `swank-repl:listener-eval` | Eval-Code → `(:write-string "<wert>\n" :repl-result)` + `(:ok nil)` |
-| `swank:autodoc` | `(:ok (:not-available nil))` — keine Arglist-Anzeige |
+| `swank-repl:listener-eval` | Eval-Code (alle Formen via `ReadAll`) → pro Ergebnis `:write-string "<w>\n" :repl-result` + `(:ok nil)` |
+| `swank:simple-completions` | `(:ok (strings...))` — Basis-Completion |
+| `swank:completions` | `(:ok ((name) (name) ...))` — c-p-c Contrib (das Op das SLIME für TAB sendet) |
+| `swank:load-file` | `(load filename)` → `(:ok "<result>")` — C-c C-l |
+| `swank:operator-arglist` | `(:ok "(name args)")` für Lambda/Macro, `(:ok ())` für Built-in — C-c C-d C-a |
+| `swank:autodoc` | `(:ok (arglist-string cache-p))` bzw. `(:not-available nil)` für Built-ins |
+| `swank:swank-macroexpand-1` / `swank-expand-1` | Eine Expansion → `(:ok "<exp>")` — C-c C-m |
+| `swank:swank-macroexpand` / `swank-expand` / `-all` | Wiederholt bis stabil (Top-Level; rekursiv in Subformen offen) |
 | sonstige | graceful `(:ok ())` statt `:abort` (SLIME-Contribs degradieren sauber) |
 
 ### Wichtigste Protokoll-Details
@@ -332,17 +338,23 @@ Status: 2026-06-21 getestet mit SLIME v2.32.
 - **`listener-eval`-Return:** `:write-string` mit `:repl-result`-Tag senden,
   dann `(:ok nil)`. Nicht `(:ok "<string>")` — SLIME destrukturiert `:ok` als
   Liste.
-- **`autodoc`:** `(:not-available nil)` statt `nil` — sonst `insert nil`-
-  Error in `slime-autodoc--format`.
+- **Mehrere Formen:** `listener-eval` liest alle Formen via `swank--read-all`
+  (`lib.ReadAll`), evaluiert jede, sendet pro Ergebnis ein `:write-string`.
+- **`completions` Format:** Liste von 1-Element-Listen `((name) ...)` — Client
+  destrukturiert `(symbol-name classification symbol)`, fehlende = nil.
+- **`autodoc`:** `(:not-available nil)` für Built-ins — sonst `insert nil`-
+  Error in `slime-autodoc--format`. Arglist via `swank--arglist` (Lambda:
+  `Type:LIST`+`Env!=nil`, Car = Parameter).
 - **eval global:** `listener-eval` nutzt `(eval (read string))`; damit
   `defun` global persistiert, wertet `eval` im `Env.Root()` (siehe oben).
-- **Eine Form pro String:** `listener-eval` liest derzeit nur die erste Form
-  via `(read string)`. Mehrere Formen pro Eingabe noch offen.
+- **C-c C-m Cursor:** `slime-bounds-of-sexp-at-point` greift bei Cursor auf
+  Symbol das Symbol — Cursor auf `(` setzen für ganze Form.
 
 ### Offen für volle SLIME-Integration
 
-`complete-symbol` (Tab-Completion), `describe-symbol`,
-`arglist-for-echo-area`, `macroexpand`, `compile-string`, `load-file`.
+`describe-symbol` (C-c C-d C-d — GoLisp ohne Docstrings), echtes
+`macroexpand-all` (rekursiv), `compile-string` / `compile-file-for-emacs`
+(C-c C-k).
 
 ---
 
