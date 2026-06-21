@@ -42,6 +42,8 @@
        (swank:simple-completions (cadr form) id))
       ((equal? op 'swank:completions)
        (swank:completions (cadr form) id))
+      ((equal? op 'swank:load-file)
+       (swank:load-file (cadr form) id))
       ;; Legacy-Prefix (Manuelle Tests)
       ((equal? op 'swank:create-repl)
        (swank:create-repl id))
@@ -112,6 +114,15 @@
   (if (null? lst)
       acc
       (swank--wrap-each (cdr lst) (append acc (list (list (car lst)))))))
+
+;; swank:load-file (filename) -> (:ok "<result>"). C-c C-l in Emacs.
+;; Nutzt GoLisp load-Spezialform.
+(defun swank:load-file (filename id)
+  (catch
+    (let ((result (eval (list (quote load) filename))))
+      (list (list :return (list :ok (swank--value-string result)) id)))
+    (lambda (err)
+      (list (list :return (list :abort (swank--value-string err)) id)))))
 
 (defun swank:listener-eval (string id)
   (catch
