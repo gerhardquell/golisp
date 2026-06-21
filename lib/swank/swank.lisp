@@ -39,6 +39,12 @@
        (swank:macroexpand-full (cadr form) id))
       ((equal? op 'swank:swank-macroexpand-all)
        (swank:macroexpand-full (cadr form) id))
+      ;; SLIMEs eigene expand-Familie (C-c C-m default). Wie macroexpand,
+      ;; aber immer String-Return (sonst char-or-string-p nil in Emacs).
+      ((equal? op 'swank:swank-expand-1)
+       (swank:macroexpand-1 (cadr form) id))
+      ((equal? op 'swank:swank-expand)
+       (swank:macroexpand-full (cadr form) id))
       ;; swank-repl contrib nutzt eigenes Package-Prefix
       ((equal? op 'swank-repl:create-repl)
        (swank:create-repl id))
