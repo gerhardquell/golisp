@@ -37,9 +37,13 @@ func evalMacroexpand(args *Cell, env *Env) (*Cell, error) {
     return form, nil
   }
 
-  // Prüfe ob das erste Element ein Makro ist
+  // Prüfe ob das erste Element ein Makro ist. form.Car kann eine
+  // Specialform (begin, if, ...) oder ein nicht gebundenes Symbol sein —
+  // dann kein Lookup-Fehler, sondern "nicht expandierbar" -> form zurück.
   fn, err := Eval(form.Car, env)
-  if err != nil { return nil, err }
+  if err != nil {
+    return form, nil
+  }
 
   // Wenn es ein Makro ist, expandieren wir es
   if fn.Type == MACRO {

@@ -33,6 +33,12 @@
        (swank:autodoc form id))
       ((equal? op 'swank:operator-arglist)
        (swank:operator-arglist (cadr form) id))
+      ((equal? op 'swank:swank-macroexpand-1)
+       (swank:macroexpand-1 (cadr form) id))
+      ((equal? op 'swank:swank-macroexpand)
+       (swank:macroexpand-full (cadr form) id))
+      ((equal? op 'swank:swank-macroexpand-all)
+       (swank:macroexpand-full (cadr form) id))
       ;; swank-repl contrib nutzt eigenes Package-Prefix
       ((equal? op 'swank-repl:create-repl)
        (swank:create-repl id))
@@ -132,6 +138,33 @@
       (if (null? al)
           (list (list :return (list :ok (list :not-available nil)) id))
           (list (list :return (list :ok (list al nil)) id))))))
+
+;; swank:swank-macroexpand-1 (string) -> (:ok "<expanded>").
+;; C-c C-m. Eine Expansion via GoLisp macroexpand-Spezialform.
+(defun swank:macroexpand-1 (string id)
+  (catch
+    (let ((form (read string)))
+      (let ((expanded (macroexpand form)))
+        (list (list :return (list :ok (swank--value-string expanded)) id))))
+    (lambda (err)
+      (list (list :return (list :abort (swank--value-string err)) id)))))
+
+;; swank:swank-macroexpand / -all (string) -> (:ok "<expanded>").
+;; Wiederhole macroexpand bis stabil. (Echtes macroexpand-all rekursiv in
+;; alle Subformen ist noch offen; v1 expandiert Top-Level wiederholt.)
+(defun swank:macroexpand-full (string id)
+  (catch
+    (let ((form (read string)))
+      (let ((expanded (swank--expand-top form)))
+        (list (list :return (list :ok (swank--value-string expanded)) id))))
+    (lambda (err)
+      (list (list :return (list :abort (swank--value-string err)) id)))))
+
+(defun swank--expand-top (form)
+  (let ((expanded (macroexpand form)))
+    (if (equal? expanded form)
+        form
+        (swank--expand-top expanded))))
 
 ;; swank:load-file (filename) -> (:ok "<result>"). C-c C-l in Emacs.
 ;; Nutzt GoLisp load-Spezialform.
