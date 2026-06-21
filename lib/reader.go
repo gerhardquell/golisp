@@ -33,6 +33,22 @@ func Read(s string) (*Cell, error) {
   return r.readExpr()
 }
 
+// ReadAll liest alle Ausdrücke aus dem String und gibt sie als Liste
+// zurück. Leerer/Whitespace-only-String → NIL. Für REPL-Eingaben mit
+// mehreren Formen pro Block (z.B. swank:listener-eval).
+func ReadAll(s string) (*Cell, error) {
+  r := NewReader(s)
+  var forms []*Cell
+  for {
+    r.skipWS()
+    if r.pos >= len(r.src) { break }
+    cell, err := r.readExpr()
+    if err != nil { return nil, err }
+    forms = append(forms, cell)
+  }
+  return SliceToCell(forms), nil
+}
+
 func (r *Reader) peek() (rune, bool) {
   if r.pos >= len(r.src) { return 0, false }
   return r.src[r.pos], true

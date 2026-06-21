@@ -45,6 +45,18 @@ func RegisterSwankEnv(env *lib.Env, send func(*lib.Cell) error) {
     }
     return lib.MakeStr(args[0].String()), nil
   }))
+
+  // swank--read-all: String -> Liste aller gelesenen Formen. Für
+  // listener-eval mit mehreren Formen pro Eingabeblock.
+  env.Set("swank--read-all", makeFn(func(args []*lib.Cell) (*lib.Cell, error) {
+    if len(args) < 1 {
+      return nil, fmt.Errorf("swank--read-all: 1 Argument nötig")
+    }
+    if args[0].Type != lib.STRING {
+      return nil, fmt.Errorf("swank--read-all: String erwartet")
+    }
+    return lib.ReadAll(args[0].Val)
+  }))
 }
 
 func makeFn(f func([]*lib.Cell) (*lib.Cell, error)) *lib.Cell {

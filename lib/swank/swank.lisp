@@ -79,11 +79,22 @@
 
 (defun swank:listener-eval (string id)
   (catch
-    (let ((expr (read string)))
-      (let ((result (eval expr)))
-        (list (list :write-string
-                    (string-append (swank--value-string result) "\n")
-                    :repl-result)
-              (list :return (list :ok (list)) id))))
+    (let ((forms (swank--read-all string)))
+      (let ((events (swank--eval-forms forms (list))))
+        (append events (list (list :return (list :ok (list)) id)))))
     (lambda (err)
       (list (list :return (list :abort (swank--value-string err)) id)))))
+
+;; Wertet alle Formen, sammelt (:write-string "<wert>\n" :repl-result)
+;; Events. eval ist Spezialform, daher Wrapper als echte FUNC.
+(defun swank--eval1 (form) (eval form))
+
+(defun swank--eval-forms (forms acc)
+  (if (null? forms)
+      acc
+      (let ((result (swank--eval1 (car forms))))
+        (swank--eval-forms
+          (cdr forms)
+          (append acc (list (list :write-string
+                                  (string-append (swank--value-string result) "\n")
+                                  :repl-result)))))))

@@ -47,6 +47,7 @@ func BaseEnv() *Env {
   env.Set("atom", makeFn(fnAtom))
   env.Set("null", makeFn(fnNull))
   env.Set("list", makeFn(fnList))
+  env.Set("append", makeFn(fnAppend))
 
   // Typ-Prädikate
   env.Set("string?", makeFn(fnStringP))
@@ -285,6 +286,14 @@ func fnList(args []*Cell) (*Cell, error) {
     result = Cons(args[i], result)
   }
   return result, nil
+}
+
+// append: (append list item) → Liste mit item am Ende (single-item, wie helper).
+func fnAppend(args []*Cell) (*Cell, error) {
+  if len(args) != 2 {
+    return nil, fmt.Errorf("append: 2 Argumente nötig (list item)")
+  }
+  return Append(args[0], args[1]), nil
 }
 
 // ---- Ausgabe ----
