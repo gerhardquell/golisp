@@ -1611,6 +1611,7 @@ SLIME sendet und destrukturiert.
 | `compile-string` / `compile-file-for-emacs` (C-c C-k) | `lib/swank/swank.lisp` | Load/Eval-Wrapper |
 | Echtes rekursives `macroexpand-all` | `lib/eval_specialforms.go`, `lib/eval_core.go`, `lib/swank/swank.lisp` | Go-Spezialform, AST-Walk ohne Evaluierung |
 | Print-Bugfix: kein `()` hinter `(print "test")` | `lib/primitives.go`, `lib/swank/env.go` | `print`/`println` geben letztes Argument zurück |
+| Print-Duplikat-Fix in SWANK | `lib/swank/swank.lisp`, `lib/swank/lisp_test.go` | Top-level `print`/`println` liefern nur Output-Event, kein `:repl-result` |
 
 **Ergebnis:** Die in Session 13 als offen markierten SWANK-Punkte sind implementiert. CLAUDE.md und TODO.md sind auf aktuellem Stand.
 
@@ -1661,6 +1662,28 @@ In Common Lisp gibt `print` das gedruckte Objekt zurück. GoLisp hatte `nil` zur
 
 ### SWANK-Ausgabe vs. Ergebnis
 `swank-print`/`swank-println` markierten ihre `:write-string`-Events fälschlich mit `:repl-result`. Der Tag gehört nur zum finalen Eval-Ergebnis. Entfernen des Tags verhindert doppelte Darstellung in SLIME.
+
+### Print-Duplikat nach SWANK-Integration (Nachtrag)
+Beim Test in SLIME zeigte `(print "test")` trotz Fix `"test""test"` — ein Output-Event plus ein `:repl-result`-Event mit dem Rückgabewert. Ursache: `swank--eval-forms` in `lib/swank/swank.lisp` hat für *jede* top-level Form ein Ergebnis-Event gesendet, auch wenn die Form selbst schon ausgegeben hat.
+
+Lösung:
+- `swank--output-only-form?` erkennt `print`/`println`/`swank-print`/`swank-println`.
+- `swank--eval-forms` unterdrückt `:repl-result` für diese Aufrufe.
+- Zwei Tests in `lib/swank/lisp_test.go` sichern: `print` liefert kein `:repl-result`, normale Formen wie `(+ 1 2)` schon.
+
+**Lernpunkt:** Ein Primitive das sein Argument zurückgibt, ist in einem REPL mit getrenntem Output/Result-Kanal doppelt sichtbar — Output *und* Result. Die Protokoll-Schicht muss entscheiden, wann ein Ergebnis zusätzlich angezeigt wird.
+
+---
+
+## Session-Abschluss 2026-06-22
+
+| Aktion | Ergebnis |
+|--------|----------|
+| Print-Duplikat-Fix | `lib/swank/swank.lisp` + `lib/swank/lisp_test.go` |
+| Build-Backup/Test-Reste entfernt | `golispd_fixed`, `.playwright-mcp/` gelöscht |
+| Commit | `71582c8` auf Branch `session-14-swank-complete-print-fix` |
+| Push | Branch auf `origin` gepusht |
+| Emacs-Integration | `(defun golisp () ... (slime-connect ...))` funktioniert |
 
 ## IST-Funde
 
