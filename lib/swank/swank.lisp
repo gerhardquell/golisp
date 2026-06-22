@@ -335,15 +335,26 @@
 ;; Events. eval ist Spezialform, daher Wrapper als echte FUNC.
 (defun swank--eval1 (form) (eval form))
 
+(defun swank--output-only-form? (form)
+  (and (list? form)
+       (not (null? form))
+       (let ((op (car form)))
+         (or (equal? op 'print)
+             (equal? op 'println)
+             (equal? op 'swank-print)
+             (equal? op 'swank-println)))))
+
 (defun swank--eval-forms (forms acc)
   (if (null? forms)
       acc
       (let ((result (swank--eval1 (car forms))))
-        (swank--eval-forms
-          (cdr forms)
-          (append acc (list (list :write-string
-                                  (string-append (swank--value-string result) "\n")
-                                  :repl-result)))))))
+        (if (swank--output-only-form? (car forms))
+            (swank--eval-forms (cdr forms) acc)
+            (swank--eval-forms
+              (cdr forms)
+              (append acc (list (list :write-string
+                                      (string-append (swank--value-string result) "\n")
+                                      :repl-result))))))))
 
 ;; swank--eval-forms-silently: wie swank--eval-forms, aber ohne
 ;; :write-string Events. Für compile-string-for-emacs.

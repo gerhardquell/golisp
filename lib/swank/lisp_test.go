@@ -297,3 +297,61 @@ func TestSwankMacroexpandAll(t *testing.T) {
     t.Fatalf("macroexpand-all should not leave when unexpanded, got: %s", s)
   }
 }
+
+func TestSwankListenerEvalPrintSuppressesResult(t *testing.T) {
+  env := lib.BaseEnv()
+  lib.LoadStdlib(env)
+  var writes []string
+  RegisterSwankEnv(env, func(c *lib.Cell) error {
+    writes = append(writes, c.String())
+    return nil
+  })
+  if err := LoadSwankLisp(env); err != nil {
+    t.Fatalf("LoadSwankLisp: %v", err)
+  }
+  cell, err := lib.Read(`(:emacs-rex (swank-repl:listener-eval "(print \"test\")") "USER" t 1)`)
+  if err != nil {
+    t.Fatalf("read: %v", err)
+  }
+  result, err := HandleMessage(env, cell)
+  if err != nil {
+    t.Fatalf("HandleMessage: %v", err)
+  }
+  s := result.String()
+  if strings.Contains(s, ":repl-result") {
+    t.Fatalf("print result should not be emitted as repl-result, got: %s", s)
+  }
+  found := false
+  for _, w := range writes {
+    if strings.Contains(w, "test") {
+      found = true
+    }
+  }
+  if !found {
+    t.Fatalf("expected print output event, got writes: %v", writes)
+  }
+}
+
+func TestSwankListenerEvalNormalResult(t *testing.T) {
+  env := lib.BaseEnv()
+  lib.LoadStdlib(env)
+  RegisterSwankEnv(env, func(c *lib.Cell) error { return nil })
+  if err := LoadSwankLisp(env); err != nil {
+    t.Fatalf("LoadSwankLisp: %v", err)
+  }
+  cell, err := lib.Read(`(:emacs-rex (swank-repl:listener-eval "(+ 1 2)") "USER" t 1)`)
+  if err != nil {
+    t.Fatalf("read: %v", err)
+  }
+  result, err := HandleMessage(env, cell)
+  if err != nil {
+    t.Fatalf("HandleMessage: %v", err)
+  }
+  s := result.String()
+  if !strings.Contains(s, ":repl-result") {
+    t.Fatalf("normal result should have :repl-result, got: %s", s)
+  }
+  if !strings.Contains(s, "3") {
+    t.Fatalf("expected result 3, got: %s", s)
+  }
+}
