@@ -54,6 +54,8 @@ golisp/
 - **Dateigröße:** max 1000 Zeilen, ab 800 sinnvoll aufteilen
 - **Datei-Header:** immer mit Autor, CoAutor, Copyright, Erstellt (YYYYMMDD)
 - **Fehler:** `fmt.Errorf("funktionsname: beschreibung")`
+- **Build:** verwende ./build für die builds
+- **tmp:** verwende ./tmp als temporäres Verzeichnis - nicht /tmp !!
 
 ### Spezialformen vs. Primitiven
 - Braucht die Funktion Zugriff auf `env`? → Spezialform in `eval.go`
@@ -327,10 +329,14 @@ Status: 2026-06-21 getestet mit SLIME v2.32.
 | `swank:simple-completions` | `(:ok (strings...))` — Basis-Completion |
 | `swank:completions` | `(:ok ((name) (name) ...))` — c-p-c Contrib (das Op das SLIME für TAB sendet) |
 | `swank:load-file` | `(load filename)` → `(:ok "<result>")` — C-c C-l |
-| `swank:operator-arglist` | `(:ok "(name args)")` für Lambda/Macro, `(:ok ())` für Built-in — C-c C-d C-a |
-| `swank:autodoc` | `(:ok (arglist-string cache-p))` bzw. `(:not-available nil)` für Built-ins |
-| `swank:swank-macroexpand-1` / `swank-expand-1` | Eine Expansion → `(:ok "<exp>")` — C-c C-m |
-| `swank:swank-macroexpand` / `swank-expand` / `-all` | Wiederholt bis stabil (Top-Level; rekursiv in Subformen offen) |
+| `swank:operator-arglist` | `(:ok "(name args)")` für Lambda/Macro/Built-in, `(:ok ())` sonst — C-c C-d C-a |
+| `swank:autodoc` | `(:ok (arglist-string cache-p))` für Lambda/Macro/Built-in, `(:not-available nil)` sonst |
+| `swank:swank-macroexpand-1` / `swank-expand-1` | Eine Top-Level-Expansion → `(:ok "<exp>")` — C-c C-m |
+| `swank:swank-macroexpand` / `swank-expand` | Wiederholt bis stabil (Top-Level) |
+| `swank:swank-macroexpand-all` / `swank-expand-all` | Rekursive Expansion in alle Subformen |
+| `swank:describe-symbol` | `(:ok (:title name :content text))` — statische Registry |
+| `swank:compile-string-for-emacs` | `(:ok t)` nach stillem Evaluieren des Strings |
+| `swank:compile-file-for-emacs` | `(:ok (:filename file :result ...))` via `(load file)` — C-c C-k |
 | sonstige | graceful `(:ok ())` statt `:abort` (SLIME-Contribs degradieren sauber) |
 
 ### Wichtigste Protokoll-Details
@@ -352,9 +358,10 @@ Status: 2026-06-21 getestet mit SLIME v2.32.
 
 ### Offen für volle SLIME-Integration
 
-`describe-symbol` (C-c C-d C-d — GoLisp ohne Docstrings), echtes
-`macroexpand-all` (rekursiv), `compile-string` / `compile-file-for-emacs`
-(C-c C-k).
+Optional ausbaufähig (nicht im aktuellen Scope): `find-definitions-for-emacs`
+(M-.), Inspector, Debugger/Restarts, `disassemble-symbol`. Die als offen
+markierten Punkte `describe-symbol`, `macroexpand-all` und
+`compile-string`/`compile-file-for-emacs` sind implementiert.
 
 ---
 

@@ -54,6 +54,59 @@ func evalMacroexpand(args *Cell, env *Env) (*Cell, error) {
   return form, nil
 }
 
+// macroexpand-all: (macroexpand-all form) → rekursiv alle Makros expandieren.
+// Expandiert Makros in allen Subformen, ohne die Form auszuwerten.
+// quote / quasiquote / function werden nicht durchdrungen.
+func evalMacroexpandAll(args *Cell, env *Env) (*Cell, error) {
+  if args == nil || args.Type != LIST || args.Car == nil {
+    return nil, fmt.Errorf("macroexpand-all: 1 Argument nötig")
+  }
+  form, err := Eval(args.Car, env)
+  if err != nil { return nil, err }
+  return macroexpandAll(form, env)
+}
+
+func macroexpandAll(form *Cell, env *Env) (*Cell, error) {
+  if form == nil || form.Type != LIST {
+    return form, nil
+  }
+  // quote / quasiquote / function nicht durchdringen
+  if form.Car != nil && form.Car.Type == ATOM {
+    switch form.Car.Val {
+    case "quote", "quasiquote", "function":
+      return form, nil
+    }
+  }
+  // Top-Level-Makro-Expansion versuchen
+  expanded, err := macroexpandOnce(form, env)
+  if err != nil { return nil, err }
+  if !cellEqual(expanded, form) {
+    return macroexpandAll(expanded, env)
+  }
+  // Kein Makro: rekursiv in car und cdr
+  newCar, err := macroexpandAll(form.Car, env)
+  if err != nil { return nil, err }
+  newCdr, err := macroexpandAll(form.Cdr, env)
+  if err != nil { return nil, err }
+  return Cons(newCar, newCdr), nil
+}
+
+// macroexpandOnce: expandiert form einmal, falls car ein Makro ist.
+// Liefert form unverändert zurück, wenn kein Makro vorliegt.
+func macroexpandOnce(form *Cell, env *Env) (*Cell, error) {
+  if form == nil || form.Type != LIST || form.Car == nil {
+    return form, nil
+  }
+  fn, err := Eval(form.Car, env)
+  if err != nil {
+    return form, nil // Spezialform oder ungebunden
+  }
+  if fn.Type == MACRO {
+    return applyLambda(fn, CellToSlice(form.Cdr))
+  }
+  return form, nil
+}
+
 // wrapBegin: mehrere Body-Ausdrücke → (begin expr1 expr2 ...)
 // Einzelner Ausdruck → direkt zurückgeben (kein unnötiger begin-Wrapper)
 func wrapBegin(exprs *Cell) *Cell {

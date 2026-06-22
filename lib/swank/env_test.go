@@ -41,3 +41,34 @@ func TestRegisterSwankEnv(t *testing.T) {
     t.Fatalf("unexpected event: %s", sent.String())
   }
 }
+
+func TestSwankPrintReturnValue(t *testing.T) {
+  env := lib.BaseEnv()
+  var sent *lib.Cell
+  send := func(c *lib.Cell) error {
+    sent = c
+    return nil
+  }
+  RegisterSwankEnv(env, send)
+
+  // (swank-print "hello")
+  cell, err := lib.Read("(swank-print \"hello\")")
+  if err != nil {
+    t.Fatalf("read failed: %v", err)
+  }
+  result, err := lib.Eval(cell, env)
+  if err != nil {
+    t.Fatalf("eval failed: %v", err)
+  }
+  // Event darf kein :repl-result tragen
+  if sent == nil {
+    t.Fatal("send callback was not invoked")
+  }
+  if sent.String() != `(:write-string "\"hello\"")` {
+    t.Fatalf("unexpected event: %s", sent.String())
+  }
+  // Rückgabewert muss das letzte Argument sein
+  if result == nil || result.String() != "\"hello\"" {
+    t.Fatalf("expected return value \"hello\", got: %v", result)
+  }
+}

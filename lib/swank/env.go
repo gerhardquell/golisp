@@ -102,6 +102,31 @@ func RegisterSwankEnv(env *lib.Env, send func(*lib.Cell) error) {
     b.WriteString(")")
     return lib.MakeStr(b.String()), nil
   }))
+  // swank--cell-type: Cell -> Typ-Name als String. Für describe-symbol,
+  // damit FUNC/MACRO/LIST/... unterschieden werden können.
+  env.Set("swank--cell-type", makeFn(func(args []*lib.Cell) (*lib.Cell, error) {
+    if len(args) < 1 || args[0] == nil {
+      return lib.MakeStr("unknown"), nil
+    }
+    switch args[0].Type {
+    case lib.ATOM:
+      return lib.MakeStr("atom"), nil
+    case lib.NUMBER:
+      return lib.MakeStr("number"), nil
+    case lib.STRING:
+      return lib.MakeStr("string"), nil
+    case lib.LIST:
+      return lib.MakeStr("lambda"), nil
+    case lib.FUNC:
+      return lib.MakeStr("function"), nil
+    case lib.MACRO:
+      return lib.MakeStr("macro"), nil
+    case lib.NIL:
+      return lib.MakeStr("nil"), nil
+    default:
+      return lib.MakeStr("unknown"), nil
+    }
+  }))
 }
 
 func makeFn(f func([]*lib.Cell) (*lib.Cell, error)) *lib.Cell {
@@ -123,11 +148,14 @@ func swankPrint(args []*lib.Cell, send func(*lib.Cell) error, newline bool) (*li
     lib.MakeAtom(":write-string"),
     lib.Cons(
       lib.MakeStr(b.String()),
-      lib.Cons(lib.MakeAtom(":repl-result"), lib.MakeNil()),
+      lib.MakeNil(),
     ),
   )
   if err := send(event); err != nil {
     return nil, fmt.Errorf("swank-print: %w", err)
   }
-  return lib.MakeNil(), nil
+  if len(args) == 0 {
+    return lib.MakeNil(), nil
+  }
+  return args[len(args)-1], nil
 }

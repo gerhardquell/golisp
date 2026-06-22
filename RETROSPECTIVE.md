@@ -1594,3 +1594,89 @@ SLIME sendet und destrukturiert.
 > "Sieben Methoden, siebenmal in den Client-Code geschaut statt in die
 >  Spec. Der Client-Code lügt nicht — die Spec manchmal schon."
 > — Gerhard & Claude, 21. Juni 2026
+
+---
+
+# Session 14: SWANK-Server vervollständigen & Print-Bug
+
+**Datum:** 2026-06-22
+**Autoren:** Gerhard Quell & Claude Sonnet 4.6
+
+## Was haben wir gebaut?
+
+| Feature | Dateien | Scope |
+|---------|---------|-------|
+| Built-in-Arglisten für `operator-arglist` / `autodoc` | `lib/swank/swank.lisp` | Lisp-Alists, ~60 Built-ins |
+| `describe-symbol` (C-c C-d C-d) | `lib/swank/swank.lisp`, `lib/swank/env.go` | Statische Registry + Cell-Typ-Primitive |
+| `compile-string` / `compile-file-for-emacs` (C-c C-k) | `lib/swank/swank.lisp` | Load/Eval-Wrapper |
+| Echtes rekursives `macroexpand-all` | `lib/eval_specialforms.go`, `lib/eval_core.go`, `lib/swank/swank.lisp` | Go-Spezialform, AST-Walk ohne Evaluierung |
+| Print-Bugfix: kein `()` hinter `(print "test")` | `lib/primitives.go`, `lib/swank/env.go` | `print`/`println` geben letztes Argument zurück |
+
+**Ergebnis:** Die in Session 13 als offen markierten SWANK-Punkte sind implementiert. CLAUDE.md und TODO.md sind auf aktuellem Stand.
+
+## Was lief gut?
+
+### Kleine Schritte statt Big-Bang
+Die Aufteilung in vier überschaubare Schritte (Arglisten → describe → Compile → macroexpand-all) hat den Scope beherrschbar gehalten. Nach jedem Schritt lief `go test ./...` grün.
+
+### Lisp-First für Protokoll-Handler
+Fast alle neuen SWANK-Features ließen sich rein in `swank.lisp` umsetzen. Nur `macroexpand-all` benötigte eine Go-Spezialform, weil das bestehende `macroexpand` seine Argumente auswertet. Das hybride Go+Lisp-Design von SWANK hat sich erneut bewährt.
+
+### Frühe Regressionstests
+Für jede Erweiterung wurden sofort Tests geschrieben — nicht nur für den Happy Path, sondern auch für Randfälle:
+- Lambda-Arglisten haben weiterhin Vorrang vor Built-in-Registries
+- `quote` wird von `macroexpand-all` nicht durchdrungen
+- `print`/`println` ohne Argumente liefern `nil`
+
+### Klare Klärungsfragen vor dem Design
+Vor der Implementierung wurden fünf gezielte Fragen gestellt (Scope, Built-in-Arglisten, describe-symbol-Format, Compile-Verhalten, Schrittgröße). Die Antworten haben Architekturentscheidungen vermieden, die später hätten rückgängig gemacht werden müssen.
+
+## Was lief nicht so gut?
+
+### Subagent-Modell-Konfiguration
+Die `feature-dev:code-explorer` Agents sind mit `invalid thinking: only type=enabled is allowed for this model` gescheitert. Statt paralleler Agenten wurde die Codebasis direkt gelesen. Das war für diesen Scope noch ok, hätte bei größerer Ausbreitung aber Zeit gekostet.
+
+**Lernpunkt:** Vor dem Starten mehrerer Subagenten das Modell/Thinking-Setup prüfen.
+
+### `macroexpand-all`: Evaluierungsfalle
+Die erste Implementation von `evalMacroexpandAll` wertete das Argument aus (`Eval(args.Car, env)`). Das ist korrekt für `(macroexpand-all (read string))` aus SWANK, aber im direkten REPL-Test `(macroexpand-all (when t 1))` führte es dazu, dass `when` bereits vollständig ausgewertet wurde. Erst Quoten der Testformen (`'(when t 1)`) machte den Test stabil.
+
+**Lernpunkt:** Spezialformen, die mit Source-Code arbeiten, brauchen Tests, die das Argument quoten.
+
+### String-Escaping in Go-Tests
+Ein neuer SWANK-Test für `print` ist wegen verschachtelter `"` / `\` zunächst als Syntaxfehler gescheitert. Erst Umstellung auf Backtick-Strings hat ihn grün gemacht.
+
+**Lernpunkt:** Bei Lisp-String-Literalen in Go-Tests direkt Backticks verwenden, sobald Backslashes vorkommen.
+
+## Technische Erkenntnisse
+
+### Fallback-Reihenfolge bei Built-in-Arglisten
+`operator-arglist` und `autodoc` fragen **zuerst Lambda/Macro, dann Built-in** ab. Warum? Weil `stdlib.lisp` Funktionen wie `append`, `assoc` und `abs` als Lambda überschreibt. Umgekehrte Reihenfolge würde fälschlich die primitive Signatur anzeigen.
+
+### `macroexpand-all` braucht einen nicht-evaluierenden Walk
+Das bestehende `macroexpand` expandiert Makros, indem es `Eval` nutzt. Für rekursive Source-Expansion reicht das nicht, weil `Eval` Subformen auswertet. `macroexpand-all` braucht einen eigenen AST-Walk, der `Eval(form.Car, env)` nur verwendet, um Makros zu identifizieren, und `applyLambda` für die Expansion.
+
+### `print`/`println`-Rückgabewert ist Protokoll-relevant
+In Common Lisp gibt `print` das gedruckte Objekt zurück. GoLisp hatte `nil` zurückgegeben. Das führte dazu, dass REPL, Stdin-Modus und SWANK hinter jeder `print`-Ausgabe `()` anzeigten. Die Rückkehr zu CL-Semantik behebt das Problem ohne neues `void`-Konzept.
+
+### SWANK-Ausgabe vs. Ergebnis
+`swank-print`/`swank-println` markierten ihre `:write-string`-Events fälschlich mit `:repl-result`. Der Tag gehört nur zum finalen Eval-Ergebnis. Entfernen des Tags verhindert doppelte Darstellung in SLIME.
+
+## IST-Funde
+
+- `eval.go` ist inzwischen aufgespalten in `eval_core.go`, `eval_lambda.go`, `eval_specialforms.go`, `eval_control.go`, `eval_quasiquote.go`, `eval_load.go`. CLAUDE.md listet noch die alte Monolith-Struktur.
+- `swank--cell-type` als neue Primitive hilft `describe-symbol`, FUNC/MACRO/LIST/NIL zu unterscheiden.
+- `assoc` aus `shellcmd.go` ist sowohl Built-in als auch in `stdlib.lisp` definiert — die Alist-Lookup-Registry funktioniert trotzdem, weil die Fallback-Reihenfolge stimmt.
+
+## Offene Punkte (nach dieser Session)
+
+- CLAUDE.md Dateistruktur anpassen (`eval.go` → split files).
+- Optional: `find-definitions-for-emacs` (M-.), Inspector, Debugger/Restarts — größere Features, die GoLisp's Reflexionsfähigkeiten erweitern müssten.
+- Optional: slime-tramp (wenn Remote-Editing gewünscht).
+
+## Fazit Session 14
+
+Vier kleine Schritte, ein abgeschlossener SWANK-Server im vereinbarten Scope. Der wiederkehrende Erfolgsfaktor war: vor jeder Zeile Code die Protokoll- und Eval-Semantik verstehen. Der Print-Bug zeigte, dass scheinbar triviale Primitive (`print`) tiefe Auswirkungen auf alle Ausgabemodi haben.
+
+> "Manchmal ist der letzte offene Punkt nicht ein fehlendes Feature, sondern ein `()` das am falschen Ort auftaucht."
+> — Gerhard & Claude, 22. Juni 2026

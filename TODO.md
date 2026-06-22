@@ -1,15 +1,15 @@
-# Aktulle Arbeiten
+# Aufgaben
 
-1. ~~Erstellen eines Swank-servers für Golisp~~ ✓ MVP funktionsfähig
-   Swank-Server nativ in golisp (`golisp --swank host:port`).
-   slime-connect (SLIME v2.32) klappt, REPL evaluiert mit Output,
-   Definitionen halten. Getestet 2026-06-21.
-   Offen für volle SLIME-Integration:
-   - complete-symbol (Tab-Completion)
-   - describe-symbol / arglist-for-echo-area
-   - macroexpand
-   - compile-string / load-file
-   - listener-eval: mehrere Formen pro String (derzeit nur erste via read)
+## 1. Vollende den swank-Server 
+- [x] Built-in-Arglisten für operator-arglist/autodoc
+- [x] describe-symbol mit statischer Registry
+- [x] compile-string / compile-file-for-emacs
+- [x] echtes rekursives macroexpand-all
 
-2. Erstellen von slime-tramp für Emacs
+## 2. Beim Aufruf in Lisp erhalte ich:
+  eval>(print "test")
+  "test"()
 
+Die Klammern am Ende sind nicht korrekt!
+- [x] print/println geben das letzte Argument zurück; swank-print/swank-println
+  markieren Ausgabe nicht mehr als :repl-result. Damit verschwindet das `()`.

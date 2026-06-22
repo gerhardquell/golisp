@@ -298,14 +298,20 @@ func fnAppend(args []*Cell) (*Cell, error) {
 
 // ---- Ausgabe ----
 
+// fnPrint: (print arg1 arg2 ...) → gibt alle Argumente auf stdout aus,
+// ohne Zeilenumbruch. Rückgabewert ist das letzte Argument (Common-Lisp-
+// Semantik), damit der REPL nicht `()` hinter die Ausgabe druckt.
 func fnPrint(args []*Cell) (*Cell, error) {
   for _, a := range args { fmt.Print(a) }
-  return MakeNil(), nil
+  if len(args) == 0 { return MakeNil(), nil }
+  return args[len(args)-1], nil
 }
 
+// fnPrintln: wie print, aber mit abschließendem Zeilenumbruch.
 func fnPrintln(args []*Cell) (*Cell, error) {
   for _, a := range args { fmt.Println(a) }
-  return MakeNil(), nil
+  if len(args) == 0 { return MakeNil(), nil }
+  return args[len(args)-1], nil
 }
 
 // apply: (apply fn arg1 ... liste) → fn auf alle Argumente anwenden
