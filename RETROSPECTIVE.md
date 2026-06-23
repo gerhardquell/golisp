@@ -1703,3 +1703,98 @@ Vier kleine Schritte, ein abgeschlossener SWANK-Server im vereinbarten Scope. De
 
 > "Manchmal ist der letzte offene Punkt nicht ein fehlendes Feature, sondern ein `()` das am falschen Ort auftaucht."
 > — Gerhard & Claude, 22. Juni 2026
+
+---
+
+# Session 15 – 2026-06-23: Schulungsunterlagen für GoLisp
+
+**Autoren:** Gerhard Quell & Claude Sonnet 4.6 / Claude
+**Branch:** session-14-swank-complete-print-fix
+
+---
+
+## Ziel
+
+TODO.md verlangte Schulungsunterlagen für alle GoLisp-Funktionen:
+
+1. `golisp-tutorial.md` – Beschreibung + 1–3 Beispiele pro Funktion
+2. `golisp-anki.json` – pro Funktion Kurzbeschreibung, 1–3 atomare Fragen, 1–3 MC-Fragen mit ≥5 Optionen
+
+Der Scope sollte alle öffentlichen Funktionen umfassen: eingebaute Primitiven, Spezialformen und die Standardbibliothek (`lib/stdlib.lisp`).
+
+---
+
+## Was haben wir gebaut?
+
+| Datei | Inhalt |
+|-------|--------|
+| `golisp-tutorial.md` | 149 Funktionen/Spezialformen/Makros, gruppiert in 17 Kategorien, mit Syntax, Beschreibung und lauffähigen Beispielen |
+| `golisp-anki.json` | 149 Karten, je 2 atomare + 1 MC-Frage mit 5 Optionen |
+| `tools/gen-training/data.py` | Rohdaten für alle Funktionen (Python-Triple-Quotes, damit Lisp-Backticks und doppelte Anführungszeichen keine Escapes erfordern) |
+| `tools/gen-training/generate.py` | Generator, der Markdown + JSON aus `data.py` erzeugt |
+| `.gitignore` | `__pycache__/` und `*.pyc` ausgeschlossen |
+
+**Commit:** `dc9cb5c` – `docs: Schulungsunterlagen für 149 GoLisp-Funktionen (Tutorial + Anki)`
+
+---
+
+## Was lief gut?
+
+### Generator-Ansatz statt manuellem Tippen
+Die Unterlagen enthalten über 6000 Zeilen Output. Statt sie von Hand zu schreiben, wurden Daten (`data.py`) und Formatierung (`generate.py`) getrennt. Das hält Konsistenz zwischen Tutorial und Anki-Karten und macht spätere Erweiterungen trivial.
+
+### Python-Triple-Quotes für Lisp-Beispiele
+Go-String-Literale hätten mit Lisp-Quasiquote-Backticks und eingebetteten doppelten Anführungszeichen kämpfen müssen. Python-Triple-Quotes erlauben es, die Lisp-Beispiele 1:1 abzulegen, ohne Escapes.
+
+### Systematische Validierung
+- JSON-Syntax mit `python3 -m json.tool` geprüft
+- Stichprobenartiges Ausführen von Beispielen gegen die `golisp`-Binary (Arithmetik, Listen, Strings, Datei-I/O, stdlib-Helfer)
+- `go test ./...` grün
+
+---
+
+## Was lief nicht so gut?
+
+### Erster Generator in Go scheiterte an String-Escaping
+Der erste Versuch, die Daten direkt in einem Go-Programm (`tools/gen-training/main.go`) als Struct-Literale abzulegen, scheiterte an den vielen doppelten Anführungszeichen in Lisp-Strings. Ein automatischer Konverter erzeugte ungültige Raw-String-Literale und Quasiquote-Backticks brachen die Delimiter.
+
+**Lösung:** Neustart mit Python-Generator. Go wurde nicht für den Datenteil gebraucht – das Tooling muss zur Aufgabe passen.
+
+### Subagent-Tool nicht verwendbar
+Geplante parallele `doc-writer`-Agents für Markdown und JSON lieferten `invalid thinking: only type=enabled is allowed for this model`. Die Arbeit wurde daher inline erledigt.
+
+**Lernpunkt:** Bei Agent-Planungen vorab das Tooling-Setup prüfen.
+
+### Datei-I/O-Beispiele brauchen `./tmp`
+Die ersten Beispiele für `file-write` etc. schlugen fehl, weil `./tmp` nicht existierte. Erst nach Einfügen von `(system "mkdir -p ./tmp")` in die Beispiele waren sie selbstlaufend.
+
+**Lernpunkt:** Beispiele müssen alle Voraussetzungen selbst erzeugen, auch wenn sie später offensichtlich erscheinen.
+
+---
+
+## Technische Erkenntnisse
+
+### Daten + Generator = skalierbare Dokumentation
+Wenn zwei Ausgabedateien aus denselben Quellen generiert werden, lohnt sich ein Generator früh. Der Mehraufwand zahlt sich bei Korrekturen und Erweiterungen aus.
+
+### MC-Fragen aus Kategorien sind eine pragmatische Lösung
+Für jede Funktion eine eigene semantische MC-Frage zu erfinden, wäre bei 149 Funktionen unverhältnismäßig. Die Kategorie-Zuordnung als MC-Frage liefert sinnvolle Distraktoren und ist automatisch generierbar.
+
+### `lib/stdlib.lisp` ist Teil der öffentlichen API
+Funktionen wie `cadr`, `filter`, `dotimes`, `push`/`pop` sind keine internen Helfer, sondern werden beim Start in die Umgebung geladen. Schulungsunterlagen, die sie auslassen, wären unvollständig.
+
+---
+
+## Offene Punkte
+
+- Keine inhaltlichen Lücken mehr für den aktuellen Scope.
+- Mögliche Erweiterungen: Audio/visuelle Anki-Karten, interaktive Übungen, Export in andere Lernsysteme.
+
+---
+
+## Fazit Session 15
+
+Die Schulungsunterlagen decken jetzt alle 149 öffentlichen GoLisp-Funktionen ab – von eingebauten Primitiven über Spezialformen bis zur Standardbibliothek. Der Generator-Ansatz macht sie wartbar und erweiterbar. Der einzige größere Umweg war der fehlgeschlagene Go-Datengenerator; der schnelle Pivot zu Python zeigte, dass Tooling-Flexibilität wichtiger ist als eine bestimmte Sprache durchzuzwingen.
+
+> "Dokumentation wird erst dann lebendig, wenn sie genauso testbar und wiederholbar ist wie der Code selbst."
+> — Gerhard & Claude, 23. Juni 2026
