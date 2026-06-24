@@ -196,3 +196,21 @@ func TestReadNestedDeep(t *testing.T) {
     t.Errorf("Kern = %q, want x", cur.String())
   }
 }
+
+func TestReaderStampsSrcLine(t *testing.T) {
+  src := "(defun f (x)\n  (* x x))\n(defun g () 1)"
+  forms, err := ReadAll(src)
+  if err != nil {
+    t.Fatalf("ReadAll: %v", err)
+  }
+  // forms = (form1 form2), beide Listen-Cells
+  f1 := forms.Car
+  f2 := forms.Cdr.Car
+  if f1.SrcLine != 1 {
+    t.Fatalf("form1 SrcLine = 1 erwartet, got %d", f1.SrcLine)
+  }
+  // form2 beginnt auf Zeile 3 (nach \n nach ))
+  if f2.SrcLine != 3 {
+    t.Fatalf("form2 SrcLine = 3 erwartet, got %d", f2.SrcLine)
+  }
+}

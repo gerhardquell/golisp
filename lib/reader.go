@@ -19,12 +19,13 @@ import (
 )
 
 type Reader struct {
-  src []rune
-  pos int
+  src  []rune
+  pos  int
+  line int
 }
 
 func NewReader(s string) *Reader {
-  return &Reader{src: []rune(s), pos: 0}
+  return &Reader{src: []rune(s), pos: 0, line: 1}
 }
 
 // Read liest einen Ausdruck aus dem Eingabestring
@@ -56,7 +57,12 @@ func (r *Reader) peek() (rune, bool) {
 
 func (r *Reader) next() (rune, bool) {
   ch, ok := r.peek()
-  if ok { r.pos++ }
+  if ok {
+    r.pos++
+    if ch == '\n' {
+      r.line++
+    }
+  }
   return ch, ok
 }
 
@@ -94,6 +100,7 @@ func (r *Reader) readExpr() (*Cell, error) {
 
 // readList liest (a b c) → verschachtelte Cons-Zellen
 func (r *Reader) readList() (*Cell, error) {
+  startLine := r.line
   r.next() // '(' überspringen
   r.skipWS()
 
@@ -109,7 +116,9 @@ func (r *Reader) readList() (*Cell, error) {
   cdr, err := r.readRest()
   if err != nil { return nil, err }
 
-  return Cons(car, cdr), nil
+  cell := Cons(car, cdr)
+  cell.SrcLine = startLine
+  return cell, nil
 }
 
 func (r *Reader) readRest() (*Cell, error) {
