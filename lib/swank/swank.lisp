@@ -410,15 +410,15 @@
   (let ((kind (swank--definition-kind name)))
     (cond
       ((or (equal? kind "lambda") (equal? kind "macro"))
-       (swank--snippet-location name (swank--definition-cell name)))
+       (swank--snippet-location name kind (swank--definition-cell name)))
       ((equal? kind "builtin")
        (list :error
          (string-append "eingebaute Funktion '" name "' hat keine Quellposition")))
       (else
        (list :error (string-append "Symbol '" name "' nicht definiert"))))))
 
-(defun swank--snippet-location (name cell)
-  (let ((header (if (equal? (swank--definition-kind name) "macro")
+(defun swank--snippet-location (name kind cell)
+  (let ((header (if (equal? kind "macro")
                     "(defmacro " "(defun ")))
     (let ((snippet (string-append header name " "
                     (swank--value-string (car cell)) " "
