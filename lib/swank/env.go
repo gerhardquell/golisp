@@ -102,6 +102,83 @@ func RegisterSwankEnv(env *lib.Env, send func(*lib.Cell) error) {
     b.WriteString(")")
     return lib.MakeStr(b.String()), nil
   }))
+  // swank--cell-type: Cell -> Typ-Name als String. Für describe-symbol,
+  // damit FUNC/MACRO/LIST/... unterschieden werden können.
+  env.Set("swank--cell-type", makeFn(func(args []*lib.Cell) (*lib.Cell, error) {
+    if len(args) < 1 || args[0] == nil {
+      return lib.MakeStr("unknown"), nil
+    }
+    switch args[0].Type {
+    case lib.ATOM:
+      return lib.MakeStr("atom"), nil
+    case lib.NUMBER:
+      return lib.MakeStr("number"), nil
+    case lib.STRING:
+      return lib.MakeStr("string"), nil
+    case lib.LIST:
+      return lib.MakeStr("lambda"), nil
+    case lib.FUNC:
+      return lib.MakeStr("function"), nil
+    case lib.MACRO:
+      return lib.MakeStr("macro"), nil
+    case lib.NIL:
+      return lib.MakeStr("nil"), nil
+    default:
+      return lib.MakeStr("unknown"), nil
+    }
+  }))
+
+  // swank--find-definition: (name) -> ("file" . line) | NIL.
+  // Map-Lookup in lib.LookupDefinition (defun/defmacro/define registriert).
+  // NIL wenn Datei leer (REPL-defined) oder nicht registriert.
+  env.Set("swank--find-definition", makeFn(func(args []*lib.Cell) (*lib.Cell, error) {
+    if len(args) < 1 {
+      return lib.MakeNil(), nil
+    }
+    loc, ok := lib.LookupDefinition(args[0].Val)
+    if !ok || loc.File == "" {
+      return lib.MakeNil(), nil
+    }
+    return lib.Cons(lib.MakeStr(loc.File), lib.MakeNum(float64(loc.Line))), nil
+  }))
+
+  // swank--definition-kind: (name) -> "lambda" | "macro" | "builtin" | "unbound".
+  // Lambda = Type:LIST mit Env!=nil; Macro = Type:MACRO; sonst builtin/unbound.
+  env.Set("swank--definition-kind", makeFn(func(args []*lib.Cell) (*lib.Cell, error) {
+    if len(args) < 1 {
+      return lib.MakeStr("unbound"), nil
+    }
+    cell, err := env.Get(args[0].Val)
+    if err != nil || cell == nil {
+      return lib.MakeStr("unbound"), nil
+    }
+    switch {
+    case cell.Type == lib.LIST && cell.Env != nil:
+      return lib.MakeStr("lambda"), nil
+    case cell.Type == lib.MACRO:
+      return lib.MakeStr("macro"), nil
+    case cell.Type == lib.FUNC:
+      return lib.MakeStr("builtin"), nil
+    default:
+      return lib.MakeStr("unbound"), nil
+    }
+  }))
+
+  // swank--definition-cell: (name) -> Lambda/Macro-Cell | NIL.
+  // Für swank--reconstruct-definition (REPL-Snippet).
+  env.Set("swank--definition-cell", makeFn(func(args []*lib.Cell) (*lib.Cell, error) {
+    if len(args) < 1 {
+      return lib.MakeNil(), nil
+    }
+    cell, err := env.Get(args[0].Val)
+    if err != nil {
+      return lib.MakeNil(), nil
+    }
+    if (cell.Type == lib.LIST && cell.Env != nil) || cell.Type == lib.MACRO {
+      return cell, nil
+    }
+    return lib.MakeNil(), nil
+  }))
 }
 
 func makeFn(f func([]*lib.Cell) (*lib.Cell, error)) *lib.Cell {
@@ -123,11 +200,14 @@ func swankPrint(args []*lib.Cell, send func(*lib.Cell) error, newline bool) (*li
     lib.MakeAtom(":write-string"),
     lib.Cons(
       lib.MakeStr(b.String()),
-      lib.Cons(lib.MakeAtom(":repl-result"), lib.MakeNil()),
+      lib.MakeNil(),
     ),
   )
   if err := send(event); err != nil {
     return nil, fmt.Errorf("swank-print: %w", err)
   }
-  return lib.MakeNil(), nil
+  if len(args) == 0 {
+    return lib.MakeNil(), nil
+  }
+  return args[len(args)-1], nil
 }

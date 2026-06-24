@@ -294,3 +294,23 @@ func TestEvalNoLeakGoroutines(t *testing.T) {
     t.Errorf("Goroutine-Leak: vor=%d nach=%d", before, after)
   }
 }
+
+// TestMacroexpandAll sichert rekursive Makro-Expansion ohne Evaluierung.
+func TestMacroexpandAll(t *testing.T) {
+  // Hilfe: definiert when-Makro, da evalStr nur BaseEnv (kein stdlib) lädt.
+  run := func(body, want string) {
+    t.Helper()
+    src := "(begin (defmacro when (test . body) `(if ,test (begin ,@body) ())) " + body + ")"
+    evalEq(t, src, want)
+  }
+  // Top-Level-Makro wird expandiert
+  run("(macroexpand-all '(when t 1))", "(if t (begin 1) ())")
+  // Rekursive Expansion in Subformen
+  run("(macroexpand-all '(list (when t 1)))", "(list (if t (begin 1) ()))")
+  // quote wird nicht durchdrungen
+  run("(macroexpand-all '(quote (when t 1)))", "(quote (when t 1))")
+  // Atom bleibt unverändert
+  run("(macroexpand-all 42)", "42")
+  // Lambda-Body wird expandiert
+  run("(macroexpand-all '(lambda (x) (when t x)))", "(lambda (x) (if t (begin x) ()))")
+}

@@ -1594,3 +1594,207 @@ SLIME sendet und destrukturiert.
 > "Sieben Methoden, siebenmal in den Client-Code geschaut statt in die
 >  Spec. Der Client-Code lügt nicht — die Spec manchmal schon."
 > — Gerhard & Claude, 21. Juni 2026
+
+---
+
+# Session 14: SWANK-Server vervollständigen & Print-Bug
+
+**Datum:** 2026-06-22
+**Autoren:** Gerhard Quell & Claude Sonnet 4.6
+
+## Was haben wir gebaut?
+
+| Feature | Dateien | Scope |
+|---------|---------|-------|
+| Built-in-Arglisten für `operator-arglist` / `autodoc` | `lib/swank/swank.lisp` | Lisp-Alists, ~60 Built-ins |
+| `describe-symbol` (C-c C-d C-d) | `lib/swank/swank.lisp`, `lib/swank/env.go` | Statische Registry + Cell-Typ-Primitive |
+| `compile-string` / `compile-file-for-emacs` (C-c C-k) | `lib/swank/swank.lisp` | Load/Eval-Wrapper |
+| Echtes rekursives `macroexpand-all` | `lib/eval_specialforms.go`, `lib/eval_core.go`, `lib/swank/swank.lisp` | Go-Spezialform, AST-Walk ohne Evaluierung |
+| Print-Bugfix: kein `()` hinter `(print "test")` | `lib/primitives.go`, `lib/swank/env.go` | `print`/`println` geben letztes Argument zurück |
+| Print-Duplikat-Fix in SWANK | `lib/swank/swank.lisp`, `lib/swank/lisp_test.go` | Top-level `print`/`println` liefern nur Output-Event, kein `:repl-result` |
+
+**Ergebnis:** Die in Session 13 als offen markierten SWANK-Punkte sind implementiert. CLAUDE.md und TODO.md sind auf aktuellem Stand.
+
+## Was lief gut?
+
+### Kleine Schritte statt Big-Bang
+Die Aufteilung in vier überschaubare Schritte (Arglisten → describe → Compile → macroexpand-all) hat den Scope beherrschbar gehalten. Nach jedem Schritt lief `go test ./...` grün.
+
+### Lisp-First für Protokoll-Handler
+Fast alle neuen SWANK-Features ließen sich rein in `swank.lisp` umsetzen. Nur `macroexpand-all` benötigte eine Go-Spezialform, weil das bestehende `macroexpand` seine Argumente auswertet. Das hybride Go+Lisp-Design von SWANK hat sich erneut bewährt.
+
+### Frühe Regressionstests
+Für jede Erweiterung wurden sofort Tests geschrieben — nicht nur für den Happy Path, sondern auch für Randfälle:
+- Lambda-Arglisten haben weiterhin Vorrang vor Built-in-Registries
+- `quote` wird von `macroexpand-all` nicht durchdrungen
+- `print`/`println` ohne Argumente liefern `nil`
+
+### Klare Klärungsfragen vor dem Design
+Vor der Implementierung wurden fünf gezielte Fragen gestellt (Scope, Built-in-Arglisten, describe-symbol-Format, Compile-Verhalten, Schrittgröße). Die Antworten haben Architekturentscheidungen vermieden, die später hätten rückgängig gemacht werden müssen.
+
+## Was lief nicht so gut?
+
+### Subagent-Modell-Konfiguration
+Die `feature-dev:code-explorer` Agents sind mit `invalid thinking: only type=enabled is allowed for this model` gescheitert. Statt paralleler Agenten wurde die Codebasis direkt gelesen. Das war für diesen Scope noch ok, hätte bei größerer Ausbreitung aber Zeit gekostet.
+
+**Lernpunkt:** Vor dem Starten mehrerer Subagenten das Modell/Thinking-Setup prüfen.
+
+### `macroexpand-all`: Evaluierungsfalle
+Die erste Implementation von `evalMacroexpandAll` wertete das Argument aus (`Eval(args.Car, env)`). Das ist korrekt für `(macroexpand-all (read string))` aus SWANK, aber im direkten REPL-Test `(macroexpand-all (when t 1))` führte es dazu, dass `when` bereits vollständig ausgewertet wurde. Erst Quoten der Testformen (`'(when t 1)`) machte den Test stabil.
+
+**Lernpunkt:** Spezialformen, die mit Source-Code arbeiten, brauchen Tests, die das Argument quoten.
+
+### String-Escaping in Go-Tests
+Ein neuer SWANK-Test für `print` ist wegen verschachtelter `"` / `\` zunächst als Syntaxfehler gescheitert. Erst Umstellung auf Backtick-Strings hat ihn grün gemacht.
+
+**Lernpunkt:** Bei Lisp-String-Literalen in Go-Tests direkt Backticks verwenden, sobald Backslashes vorkommen.
+
+## Technische Erkenntnisse
+
+### Fallback-Reihenfolge bei Built-in-Arglisten
+`operator-arglist` und `autodoc` fragen **zuerst Lambda/Macro, dann Built-in** ab. Warum? Weil `stdlib.lisp` Funktionen wie `append`, `assoc` und `abs` als Lambda überschreibt. Umgekehrte Reihenfolge würde fälschlich die primitive Signatur anzeigen.
+
+### `macroexpand-all` braucht einen nicht-evaluierenden Walk
+Das bestehende `macroexpand` expandiert Makros, indem es `Eval` nutzt. Für rekursive Source-Expansion reicht das nicht, weil `Eval` Subformen auswertet. `macroexpand-all` braucht einen eigenen AST-Walk, der `Eval(form.Car, env)` nur verwendet, um Makros zu identifizieren, und `applyLambda` für die Expansion.
+
+### `print`/`println`-Rückgabewert ist Protokoll-relevant
+In Common Lisp gibt `print` das gedruckte Objekt zurück. GoLisp hatte `nil` zurückgegeben. Das führte dazu, dass REPL, Stdin-Modus und SWANK hinter jeder `print`-Ausgabe `()` anzeigten. Die Rückkehr zu CL-Semantik behebt das Problem ohne neues `void`-Konzept.
+
+### SWANK-Ausgabe vs. Ergebnis
+`swank-print`/`swank-println` markierten ihre `:write-string`-Events fälschlich mit `:repl-result`. Der Tag gehört nur zum finalen Eval-Ergebnis. Entfernen des Tags verhindert doppelte Darstellung in SLIME.
+
+### Print-Duplikat nach SWANK-Integration (Nachtrag)
+Beim Test in SLIME zeigte `(print "test")` trotz Fix `"test""test"` — ein Output-Event plus ein `:repl-result`-Event mit dem Rückgabewert. Ursache: `swank--eval-forms` in `lib/swank/swank.lisp` hat für *jede* top-level Form ein Ergebnis-Event gesendet, auch wenn die Form selbst schon ausgegeben hat.
+
+Lösung:
+- `swank--output-only-form?` erkennt `print`/`println`/`swank-print`/`swank-println`.
+- `swank--eval-forms` unterdrückt `:repl-result` für diese Aufrufe.
+- Zwei Tests in `lib/swank/lisp_test.go` sichern: `print` liefert kein `:repl-result`, normale Formen wie `(+ 1 2)` schon.
+
+**Lernpunkt:** Ein Primitive das sein Argument zurückgibt, ist in einem REPL mit getrenntem Output/Result-Kanal doppelt sichtbar — Output *und* Result. Die Protokoll-Schicht muss entscheiden, wann ein Ergebnis zusätzlich angezeigt wird.
+
+---
+
+## Session-Abschluss 2026-06-22
+
+| Aktion | Ergebnis |
+|--------|----------|
+| Print-Duplikat-Fix | `lib/swank/swank.lisp` + `lib/swank/lisp_test.go` |
+| Build-Backup/Test-Reste entfernt | `golispd_fixed`, `.playwright-mcp/` gelöscht |
+| Commit | `71582c8` auf Branch `session-14-swank-complete-print-fix` |
+| Push | Branch auf `origin` gepusht |
+| Emacs-Integration | `(defun golisp () ... (slime-connect ...))` funktioniert |
+
+## IST-Funde
+
+- `eval.go` ist inzwischen aufgespalten in `eval_core.go`, `eval_lambda.go`, `eval_specialforms.go`, `eval_control.go`, `eval_quasiquote.go`, `eval_load.go`. CLAUDE.md listet noch die alte Monolith-Struktur.
+- `swank--cell-type` als neue Primitive hilft `describe-symbol`, FUNC/MACRO/LIST/NIL zu unterscheiden.
+- `assoc` aus `shellcmd.go` ist sowohl Built-in als auch in `stdlib.lisp` definiert — die Alist-Lookup-Registry funktioniert trotzdem, weil die Fallback-Reihenfolge stimmt.
+
+## Offene Punkte (nach dieser Session)
+
+- CLAUDE.md Dateistruktur anpassen (`eval.go` → split files).
+- Optional: `find-definitions-for-emacs` (M-.), Inspector, Debugger/Restarts — größere Features, die GoLisp's Reflexionsfähigkeiten erweitern müssten.
+- Optional: slime-tramp (wenn Remote-Editing gewünscht).
+
+## Fazit Session 14
+
+Vier kleine Schritte, ein abgeschlossener SWANK-Server im vereinbarten Scope. Der wiederkehrende Erfolgsfaktor war: vor jeder Zeile Code die Protokoll- und Eval-Semantik verstehen. Der Print-Bug zeigte, dass scheinbar triviale Primitive (`print`) tiefe Auswirkungen auf alle Ausgabemodi haben.
+
+> "Manchmal ist der letzte offene Punkt nicht ein fehlendes Feature, sondern ein `()` das am falschen Ort auftaucht."
+> — Gerhard & Claude, 22. Juni 2026
+
+---
+
+# Session 15 – 2026-06-23: Schulungsunterlagen für GoLisp
+
+**Autoren:** Gerhard Quell & Claude Sonnet 4.6 / Claude
+**Branch:** session-14-swank-complete-print-fix
+
+---
+
+## Ziel
+
+TODO.md verlangte Schulungsunterlagen für alle GoLisp-Funktionen:
+
+1. `golisp-tutorial.md` – Beschreibung + 1–3 Beispiele pro Funktion
+2. `golisp-anki.json` – pro Funktion Kurzbeschreibung, 1–3 atomare Fragen, 1–3 MC-Fragen mit ≥5 Optionen
+
+Der Scope sollte alle öffentlichen Funktionen umfassen: eingebaute Primitiven, Spezialformen und die Standardbibliothek (`lib/stdlib.lisp`).
+
+---
+
+## Was haben wir gebaut?
+
+| Datei | Inhalt |
+|-------|--------|
+| `golisp-tutorial.md` | 149 Funktionen/Spezialformen/Makros, gruppiert in 17 Kategorien, mit Syntax, Beschreibung und lauffähigen Beispielen |
+| `golisp-anki.json` | 149 Karten, je 2 atomare + 1 MC-Frage mit 5 Optionen |
+| `tools/gen-training/data.py` | Rohdaten für alle Funktionen (Python-Triple-Quotes, damit Lisp-Backticks und doppelte Anführungszeichen keine Escapes erfordern) |
+| `tools/gen-training/generate.py` | Generator, der Markdown + JSON aus `data.py` erzeugt |
+| `.gitignore` | `__pycache__/` und `*.pyc` ausgeschlossen |
+
+**Commit:** `dc9cb5c` – `docs: Schulungsunterlagen für 149 GoLisp-Funktionen (Tutorial + Anki)`
+
+---
+
+## Was lief gut?
+
+### Generator-Ansatz statt manuellem Tippen
+Die Unterlagen enthalten über 6000 Zeilen Output. Statt sie von Hand zu schreiben, wurden Daten (`data.py`) und Formatierung (`generate.py`) getrennt. Das hält Konsistenz zwischen Tutorial und Anki-Karten und macht spätere Erweiterungen trivial.
+
+### Python-Triple-Quotes für Lisp-Beispiele
+Go-String-Literale hätten mit Lisp-Quasiquote-Backticks und eingebetteten doppelten Anführungszeichen kämpfen müssen. Python-Triple-Quotes erlauben es, die Lisp-Beispiele 1:1 abzulegen, ohne Escapes.
+
+### Systematische Validierung
+- JSON-Syntax mit `python3 -m json.tool` geprüft
+- Stichprobenartiges Ausführen von Beispielen gegen die `golisp`-Binary (Arithmetik, Listen, Strings, Datei-I/O, stdlib-Helfer)
+- `go test ./...` grün
+
+---
+
+## Was lief nicht so gut?
+
+### Erster Generator in Go scheiterte an String-Escaping
+Der erste Versuch, die Daten direkt in einem Go-Programm (`tools/gen-training/main.go`) als Struct-Literale abzulegen, scheiterte an den vielen doppelten Anführungszeichen in Lisp-Strings. Ein automatischer Konverter erzeugte ungültige Raw-String-Literale und Quasiquote-Backticks brachen die Delimiter.
+
+**Lösung:** Neustart mit Python-Generator. Go wurde nicht für den Datenteil gebraucht – das Tooling muss zur Aufgabe passen.
+
+### Subagent-Tool nicht verwendbar
+Geplante parallele `doc-writer`-Agents für Markdown und JSON lieferten `invalid thinking: only type=enabled is allowed for this model`. Die Arbeit wurde daher inline erledigt.
+
+**Lernpunkt:** Bei Agent-Planungen vorab das Tooling-Setup prüfen.
+
+### Datei-I/O-Beispiele brauchen `./tmp`
+Die ersten Beispiele für `file-write` etc. schlugen fehl, weil `./tmp` nicht existierte. Erst nach Einfügen von `(system "mkdir -p ./tmp")` in die Beispiele waren sie selbstlaufend.
+
+**Lernpunkt:** Beispiele müssen alle Voraussetzungen selbst erzeugen, auch wenn sie später offensichtlich erscheinen.
+
+---
+
+## Technische Erkenntnisse
+
+### Daten + Generator = skalierbare Dokumentation
+Wenn zwei Ausgabedateien aus denselben Quellen generiert werden, lohnt sich ein Generator früh. Der Mehraufwand zahlt sich bei Korrekturen und Erweiterungen aus.
+
+### MC-Fragen aus Kategorien sind eine pragmatische Lösung
+Für jede Funktion eine eigene semantische MC-Frage zu erfinden, wäre bei 149 Funktionen unverhältnismäßig. Die Kategorie-Zuordnung als MC-Frage liefert sinnvolle Distraktoren und ist automatisch generierbar.
+
+### `lib/stdlib.lisp` ist Teil der öffentlichen API
+Funktionen wie `cadr`, `filter`, `dotimes`, `push`/`pop` sind keine internen Helfer, sondern werden beim Start in die Umgebung geladen. Schulungsunterlagen, die sie auslassen, wären unvollständig.
+
+---
+
+## Offene Punkte
+
+- Keine inhaltlichen Lücken mehr für den aktuellen Scope.
+- Mögliche Erweiterungen: Audio/visuelle Anki-Karten, interaktive Übungen, Export in andere Lernsysteme.
+
+---
+
+## Fazit Session 15
+
+Die Schulungsunterlagen decken jetzt alle 149 öffentlichen GoLisp-Funktionen ab – von eingebauten Primitiven über Spezialformen bis zur Standardbibliothek. Der Generator-Ansatz macht sie wartbar und erweiterbar. Der einzige größere Umweg war der fehlgeschlagene Go-Datengenerator; der schnelle Pivot zu Python zeigte, dass Tooling-Flexibilität wichtiger ist als eine bestimmte Sprache durchzuzwingen.
+
+> "Dokumentation wird erst dann lebendig, wenn sie genauso testbar und wiederholbar ist wie der Code selbst."
+> — Gerhard & Claude, 23. Juni 2026

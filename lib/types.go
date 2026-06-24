@@ -34,6 +34,9 @@ type Cell struct {
   Fn   func(args []*Cell) (*Cell, error)
   // Lambda-Closure: Umgebung zum Zeitpunkt der Definition
   Env  interface{} // *Env – interface{} um Zirkelimport zu vermeiden
+  // Quellposition (Reader/Load gestempelt, 0 = unbekannt)
+  SrcFile string
+  SrcLine int
 }
 
 // Singleton nil cell - vermeidet Allokationen für jedes ()

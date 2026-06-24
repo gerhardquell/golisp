@@ -40,9 +40,10 @@ func Eval(expr *Cell, env *Env) (*Cell, error) {
       // ── Nicht-Tail: Ergebnis sofort zurückgeben ──
       case "quote":        return expr.Cdr.Car, nil
       case "macroexpand":  return evalMacroexpand(expr.Cdr, env)
-      case "define", "setq":  return evalDefine(expr.Cdr, env)
-      case "defun":        return evalDefun(expr.Cdr, env)
-      case "defmacro":     return evalDefmacro(expr.Cdr, env)
+      case "macroexpand-all": return evalMacroexpandAll(expr.Cdr, env)
+      case "define", "setq":  return evalDefine(expr, env)
+      case "defun":        return evalDefun(expr, env)
+      case "defmacro":     return evalDefmacro(expr, env)
       case "lambda":       return evalLambda(expr.Cdr, env)
       case "set!":         return evalSet(expr.Cdr, env)
       case "setq*":        return evalSetQStar(expr.Cdr, env)

@@ -196,3 +196,11 @@ func TestPrimitiveFileIOWriteFailure(t *testing.T) {
   // Vermeide Datei-Leck: nothing to clean (write failed)
   _ = os.Remove("/nonexistent_dir_xyz/file.txt")
 }
+
+// TestPrimitivePrintReturnValue sichert, dass print/println das letzte
+// Argument zurückgeben, damit der REPL nicht `()` hinter die Ausgabe druckt.
+func TestPrimitivePrintReturnValue(t *testing.T) {
+  evalEq(t, `(print "hello")`, `"hello"`)
+  evalEq(t, `(println 1 2 3)`, "3")
+  evalEq(t, `(print)`, "()")
+}
