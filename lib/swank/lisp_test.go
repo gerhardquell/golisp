@@ -355,3 +355,78 @@ func TestSwankListenerEvalNormalResult(t *testing.T) {
     t.Fatalf("expected result 3, got: %s", s)
   }
 }
+
+func TestSwankFindDefinitionsFileLocation(t *testing.T) {
+  lib.ClearDefinitions()
+  env := lib.BaseEnv()
+  lib.LoadStdlib(env)
+  RegisterSwankEnv(env, func(c *lib.Cell) error { return nil })
+  if err := LoadSwankLisp(env); err != nil {
+    t.Fatalf("LoadSwankLisp: %v", err)
+  }
+  lib.RegisterDefinition("myfn", "/abs/src.lisp", 12)
+  cell, err := lib.Read(`(:emacs-rex (swank:find-definitions-for-emacs "myfn") nil t 1)`)
+  if err != nil {
+    t.Fatalf("read: %v", err)
+  }
+  result, err := HandleMessage(env, cell)
+  if err != nil {
+    t.Fatalf("HandleMessage: %v", err)
+  }
+  s := result.String()
+  if !strings.Contains(s, ":location") || !strings.Contains(s, "/abs/src.lisp") || !strings.Contains(s, ":line") {
+    t.Fatalf("expected file location, got: %s", s)
+  }
+}
+
+func TestSwankFindDefinitionsBuiltInError(t *testing.T) {
+  lib.ClearDefinitions()
+  env := lib.BaseEnv()
+  lib.LoadStdlib(env)
+  RegisterSwankEnv(env, func(c *lib.Cell) error { return nil })
+  if err := LoadSwankLisp(env); err != nil {
+    t.Fatalf("LoadSwankLisp: %v", err)
+  }
+  cell, err := lib.Read(`(:emacs-rex (swank:find-definitions-for-emacs "car") nil t 1)`)
+  if err != nil {
+    t.Fatalf("read: %v", err)
+  }
+  result, err := HandleMessage(env, cell)
+  if err != nil {
+    t.Fatalf("HandleMessage: %v", err)
+  }
+  s := result.String()
+  if !strings.Contains(s, ":error") {
+    t.Fatalf("expected :error for built-in, got: %s", s)
+  }
+}
+
+func TestSwankFindDefinitionsReplSnippet(t *testing.T) {
+  lib.ClearDefinitions()
+  env := lib.BaseEnv()
+  lib.LoadStdlib(env)
+  RegisterSwankEnv(env, func(c *lib.Cell) error { return nil })
+  if err := LoadSwankLisp(env); err != nil {
+    t.Fatalf("LoadSwankLisp: %v", err)
+  }
+  // REPL-definiert (kein SrcFile): via listener-eval definieren
+  leval, err := lib.Read(`(:emacs-rex (swank-repl:listener-eval "(defun rfn (n) (* n 2))") nil t 1)`)
+  if err != nil {
+    t.Fatalf("read: %v", err)
+  }
+  if _, err := HandleMessage(env, leval); err != nil {
+    t.Fatalf("listener-eval: %v", err)
+  }
+  cell, err := lib.Read(`(:emacs-rex (swank:find-definitions-for-emacs "rfn") nil t 1)`)
+  if err != nil {
+    t.Fatalf("read: %v", err)
+  }
+  result, err := HandleMessage(env, cell)
+  if err != nil {
+    t.Fatalf("HandleMessage: %v", err)
+  }
+  s := result.String()
+  if !strings.Contains(s, ":buffer") || !strings.Contains(s, "rfn") {
+    t.Fatalf("expected buffer snippet for REPL fn, got: %s", s)
+  }
+}

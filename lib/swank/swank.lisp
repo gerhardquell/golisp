@@ -189,6 +189,8 @@
        (swank:compile-file-for-emacs (cadr form) id))
       ((equal? op 'swank:compile-string-for-emacs)
        (swank:compile-string-for-emacs (cadr form) id))
+      ((equal? op 'swank:find-definitions-for-emacs)
+       (swank:find-definitions-for-emacs (cadr form) id))
       ;; Legacy-Prefix (Manuelle Tests)
       ((equal? op 'swank:create-repl)
        (swank:create-repl id))
@@ -385,3 +387,44 @@
       (list (list :return (list :ok t) id)))
     (lambda (err)
       (list (list :return (list :abort (swank--value-string err)) id)))))
+
+;; swank:find-definitions-for-emacs (name) -> (:ok ((:location ...))) | (:ok (:error "...")).
+;; M-. in SLIME. Map-Lookup zuerst; sonst REPL-Snippet-Fallback oder :error.
+(defun swank:find-definitions-for-emacs (name id)
+  (catch
+    (let ((loc (swank--find-definition name)))
+      (let ((location
+              (if (null? loc)
+                  (swank--location-or-error name)
+                  (list :location
+                        (list :file (car loc))
+                        (list :line (cdr loc) :align t)
+                        (list)))))
+        (list (list :return (list :ok (list location)) id))))
+    (lambda (err)
+      (list (list :return (list :abort (swank--value-string err)) id)))))
+
+;; Kein Map-Treffer: REPL-definiert (Lambda/Macro) -> Snippet-Buffer;
+;; Built-in (FUNC ohne Env) oder unbound -> :error.
+(defun swank--location-or-error (name)
+  (let ((kind (swank--definition-kind name)))
+    (cond
+      ((or (equal? kind "lambda") (equal? kind "macro"))
+       (swank--snippet-location name (swank--definition-cell name)))
+      ((equal? kind "builtin")
+       (list :error
+         (string-append "eingebaute Funktion '" name "' hat keine Quellposition")))
+      (else
+       (list :error (string-append "Symbol '" name "' nicht definiert"))))))
+
+(defun swank--snippet-location (name cell)
+  (let ((header (if (equal? (swank--definition-kind name) "macro")
+                    "(defmacro " "(defun ")))
+    (let ((snippet (string-append header name " "
+                    (swank--value-string (car cell)) " "
+                    (swank--value-string (cdr cell)) ")")))
+      (list :location
+            (list :buffer (string-append "*slime-source " name "*")
+                  (list :source snippet))
+            (list :position 1)
+            (list)))))
