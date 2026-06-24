@@ -33,3 +33,6 @@ certs/
 *.crt
 *.key
 *.pem
+
+# Temporaer: Builds, Test-Scripts, Server-Logs
+/tmp/
