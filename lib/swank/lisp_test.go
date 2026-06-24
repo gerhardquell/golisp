@@ -377,6 +377,14 @@ func TestSwankFindDefinitionsFileLocation(t *testing.T) {
   if !strings.Contains(s, ":location") || !strings.Contains(s, "/abs/src.lisp") || !strings.Contains(s, ":line") {
     t.Fatalf("expected file location, got: %s", s)
   }
+  // SLIME erwartet (name location)-Paare, keine nackte Location.
+  if !strings.Contains(s, `("myfn" (:location`) {
+    t.Fatalf("expected (name location) dspec-wrapper, got: %s", s)
+  }
+  // :line N ohne :align (SLIME-kompatibel).
+  if !strings.Contains(s, "(:line 12)") || strings.Contains(s, ":align") {
+    t.Fatalf("expected (:line 12) without :align, got: %s", s)
+  }
 }
 
 func TestSwankFindDefinitionsBuiltInError(t *testing.T) {

@@ -13,6 +13,7 @@ package lib
 import (
   "fmt"
   "os"
+  "path/filepath"
   "strings"
 )
 
@@ -59,6 +60,9 @@ func evalLoad(args *Cell, env *Env) (*Cell, error) {
   resolvedPath, err := resolveLibraryPath(filenameCell.Val)
   if err != nil {
     return nil, fmt.Errorf("load: %v", err)
+  }
+  if abs, aerr := filepath.Abs(resolvedPath); aerr == nil {
+    resolvedPath = abs
   }
 
   data, err := os.ReadFile(resolvedPath)

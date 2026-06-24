@@ -388,8 +388,9 @@
     (lambda (err)
       (list (list :return (list :abort (swank--value-string err)) id)))))
 
-;; swank:find-definitions-for-emacs (name) -> (:ok ((:location ...))) | (:ok (:error "...")).
+;; swank:find-definitions-for-emacs (name) -> (:ok ((name location))) | (:ok (:error "...")).
 ;; M-. in SLIME. Map-Lookup zuerst; sonst REPL-Snippet-Fallback oder :error.
+;; SLIME erwartet Liste von (dspec location)-Paaren, keine nackten Locations.
 (defun swank:find-definitions-for-emacs (name id)
   (catch
     (let ((loc (swank--find-definition name)))
@@ -398,11 +399,19 @@
                   (swank--location-or-error name)
                   (list :location
                         (list :file (car loc))
-                        (list :line (cdr loc) :align t)
+                        (list :line (cdr loc))
                         (list)))))
-        (list (list :return (list :ok (list location)) id))))
+        (let ((result
+                (if (swank--error-location? location)
+                    location
+                    (list (list name location)))))
+          (list (list :return (list :ok result) id)))))
     (lambda (err)
       (list (list :return (list :abort (swank--value-string err)) id)))))
+
+;; Test ob eine Location ein :error-Ergebnis ist (kein Sprung-Ziel).
+(defun swank--error-location? (loc)
+  (and (list? loc) (not (null? loc)) (equal? (car loc) :error)))
 
 ;; Kein Map-Treffer: REPL-definiert (Lambda/Macro) -> Snippet-Buffer;
 ;; Built-in (FUNC ohne Env) oder unbound -> :error.

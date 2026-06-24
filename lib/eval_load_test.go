@@ -36,6 +36,40 @@ func TestLoadStampsSrcFile(t *testing.T) {
   }
 }
 
+// Relative Load-Pfade muessen zu absoluten SrcFile-Pfaden aufgeloest werden,
+// damit SLIME M-. die Datei findet unabhaengig vom Emacs default-directory.
+func TestLoadRelativePathAbsoluteSrcFile(t *testing.T) {
+  ClearDefinitions()
+  dir := t.TempDir()
+  absFile := filepath.Join(dir, "rel.lisp")
+  if err := os.WriteFile(absFile, []byte("(defun rel-fn () 1)\n"), 0644); err != nil {
+    t.Fatalf("write: %v", err)
+  }
+  // CWD auf das Temp-Verzeichnis setzen, damit der relative Pfad greift.
+  wd, err := os.Getwd()
+  if err != nil {
+    t.Fatalf("getwd: %v", err)
+  }
+  if err := os.Chdir(dir); err != nil {
+    t.Fatalf("chdir: %v", err)
+  }
+  defer os.Chdir(wd)
+  env := BaseEnv()
+  if _, err := LoadString(`(load "rel.lisp")`, env); err != nil {
+    t.Fatalf("load: %v", err)
+  }
+  loc, ok := LookupDefinition("rel-fn")
+  if !ok {
+    t.Fatalf("rel-fn nicht registriert")
+  }
+  if !filepath.IsAbs(loc.File) {
+    t.Fatalf("SrcFile absolut erwartet, got %q", loc.File)
+  }
+  if loc.File != absFile {
+    t.Fatalf("SrcFile = %q erwartet, got %q", absFile, loc.File)
+  }
+}
+
 func TestDefunRegistersLocation(t *testing.T) {
   ClearDefinitions()
   env := BaseEnv()
