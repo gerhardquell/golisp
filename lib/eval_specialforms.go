@@ -16,11 +16,13 @@ import (
   "fmt"
 )
 
-func evalDefine(args *Cell, env *Env) (*Cell, error) {
+func evalDefine(form *Cell, env *Env) (*Cell, error) {
+  args := form.Cdr
   name := args.Car.Val
   val, err := Eval(args.Cdr.Car, env)
   if err != nil { return nil, err }
   env.Set(name, val)
+  RegisterDefinition(name, form.SrcFile, form.SrcLine)
   return MakeAtom(name), nil
 }
 
@@ -119,10 +121,12 @@ func wrapBegin(exprs *Cell) *Cell {
   return Cons(MakeAtom("begin"), exprs)  // mehrere → (begin ...)
 }
 
-func evalDefun(args *Cell, env *Env) (*Cell, error) {
+func evalDefun(form *Cell, env *Env) (*Cell, error) {
+  args := form.Cdr
   name := args.Car.Val
   lam  := makeLambda(args.Cdr.Car, wrapBegin(args.Cdr.Cdr), env)
   env.Set(name, lam)
+  RegisterDefinition(name, form.SrcFile, form.SrcLine)
   return MakeAtom(name), nil
 }
 
@@ -232,11 +236,13 @@ func evalNot(args *Cell, env *Env) (*Cell, error) {
 
 // defmacro: (defmacro name (params) body)
 // Wie defun, aber speichert MACRO statt LIST
-func evalDefmacro(args *Cell, env *Env) (*Cell, error) {
+func evalDefmacro(form *Cell, env *Env) (*Cell, error) {
+  args := form.Cdr
   name := args.Car.Val
   lam  := makeLambda(args.Cdr.Car, wrapBegin(args.Cdr.Cdr), env)
   lam.Type = MACRO   // ← einziger Unterschied zu defun!
   env.Set(name, lam)
+  RegisterDefinition(name, form.SrcFile, form.SrcLine)
   return MakeAtom(name), nil
 }
 
