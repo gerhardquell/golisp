@@ -78,6 +78,10 @@ func evalLoad(args *Cell, env *Env) (*Cell, error) {
     expr, err := r.readExpr()
     if err != nil { return nil, fmt.Errorf("load %s: %w", resolvedPath, err) }
 
+    if expr.Type == LIST {
+      expr.SrcFile = resolvedPath
+    }
+
     result, err = Eval(expr, env)
     if err != nil { return nil, fmt.Errorf("load %s: %w", resolvedPath, err) }
   }
