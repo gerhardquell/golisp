@@ -127,6 +127,19 @@ func RegisterSwankEnv(env *lib.Env, send func(*lib.Cell) error) {
       return lib.MakeStr("unknown"), nil
     }
   }))
+
+  // swank--find-definition: (name) -> ("file" . line) | NIL.
+  // Map-Lookup in lib.LookupDefinition (defun/defmacro/define registriert).
+  env.Set("swank--find-definition", makeFn(func(args []*lib.Cell) (*lib.Cell, error) {
+    if len(args) < 1 {
+      return lib.MakeNil(), nil
+    }
+    loc, ok := lib.LookupDefinition(args[0].Val)
+    if !ok {
+      return lib.MakeNil(), nil
+    }
+    return lib.Cons(lib.MakeStr(loc.File), lib.MakeNum(float64(loc.Line))), nil
+  }))
 }
 
 func makeFn(f func([]*lib.Cell) (*lib.Cell, error)) *lib.Cell {
