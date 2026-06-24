@@ -337,6 +337,7 @@ Status: 2026-06-21 getestet mit SLIME v2.32.
 | `swank:describe-symbol` | `(:ok (:title name :content text))` — statische Registry |
 | `swank:compile-string-for-emacs` | `(:ok t)` nach stillem Evaluieren des Strings |
 | `swank:compile-file-for-emacs` | `(:ok (:filename file :result ...))` via `(load file)` — C-c C-k |
+| `swank:find-definitions-for-emacs` | Map-Lookup → `:location (:file ... :line N)`, REPL-Snippet-Fallback, Built-in `:error` — M-. |
 | sonstige | graceful `(:ok ())` statt `:abort` (SLIME-Contribs degradieren sauber) |
 
 ### Wichtigste Protokoll-Details
@@ -355,13 +356,14 @@ Status: 2026-06-21 getestet mit SLIME v2.32.
   `defun` global persistiert, wertet `eval` im `Env.Root()` (siehe oben).
 - **C-c C-m Cursor:** `slime-bounds-of-sexp-at-point` greift bei Cursor auf
   Symbol das Symbol — Cursor auf `(` setzen für ganze Form.
+- **`find-definitions-for-emacs` (M-.):** Lookup in lib.defloc-Map (defun/defmacro/define registrieren `SrcFile`/`SrcLine`). REPL-definierte Funktionen (kein SrcFile) → Snippet-Buffer; Built-ins → `:error`.
 
 ### Offen für volle SLIME-Integration
 
-Optional ausbaufähig (nicht im aktuellen Scope): `find-definitions-for-emacs`
-(M-.), Inspector, Debugger/Restarts, `disassemble-symbol`. Die als offen
-markierten Punkte `describe-symbol`, `macroexpand-all` und
-`compile-string`/`compile-file-for-emacs` sind implementiert.
+Optional ausbaufähig (nicht im aktuellen Scope): Inspector, Debugger/Restarts,
+`disassemble-symbol`. Die als offen markierten Punkte `describe-symbol`,
+`macroexpand-all`, `compile-string`/`compile-file-for-emacs` und
+`find-definitions-for-emacs` sind implementiert.
 
 ---
 
