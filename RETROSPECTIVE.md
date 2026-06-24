@@ -1798,3 +1798,180 @@ Die Schulungsunterlagen decken jetzt alle 149 öffentlichen GoLisp-Funktionen ab
 
 > "Dokumentation wird erst dann lebendig, wenn sie genauso testbar und wiederholbar ist wie der Code selbst."
 > — Gerhard & Claude, 23. Juni 2026
+
+---
+
+# Session 16 – 2026-06-24: find-definitions-for-emacs (M-.) via Subagent-Driven Development
+
+**Autoren:** Gerhard Quell & Claude (Sonnet 4.6 / GLM-5.2)
+**Branch:** session-14-swank-complete-print-fix → gemerged nach main (7a4202f)
+
+---
+
+## Ziel
+
+TODO.md Punkt 2 hieß „slime-tramp für Emacs erstellen". Beim Klären stellte sich
+heraus: slime-tramp war der falsche Begriff. Gerhards echter Use-Case war lokal —
+`M-.` in SLIME soll zur Definition einer `defun`/`defmacro`/`define` in der
+echten Quelldatei springen, Zeile genau. Kein Remote-TRAMP nötig.
+
+Zusätzliches Ziel: Die ganze Feature-Entwicklung erstmals vollständig durch den
+Superpowers-Workflow laufen lassen (Brainstorming → Spec → Plan → Subagent-
+Driven Development → Final Review → Branch-Finishing).
+
+---
+
+## Was haben wir gebaut?
+
+`swank:find-definitions-for-emacs` — M-. funktioniert in Emacs/SLIME gegen den
+GoLisp-SWANK-Server. Drei Verhalten:
+- **Datei-definiert** (`defun` aus geladener Datei): Springt zur Datei + Zeile.
+- **REPL-definiert** (kein SrcFile): Rekonstruierter Snippet im Temp-Buffer.
+- **Built-in / unbound**: `:error`-Meldung.
+
+| Komponente | Aufgabe |
+|------------|---------|
+| `Cell.SrcFile`/`SrcLine` (lib/types.go) | Quellposition auf der Datenstruktur |
+| Reader (lib/reader.go) | Zeilen-Tracking, stempelt `SrcLine` auf jede Listen-Cell |
+| `evalLoad` (lib/eval_load.go) | Stempelt absoluten `SrcFile` auf Top-Level-Formen |
+| `lib/defloc.go` (neu) | Thread-safe `map[string]DefLoc` + `sync.RWMutex` |
+| `evalDefun`/`evalDefmacro`/`evalDefine` | Registrieren `(symbol → file/line)` |
+| 3 Go-Primitive (lib/swank/env.go) | `swank--find-definition`, `--definition-kind`, `--definition-cell` |
+| Handler (lib/swank/swank.lisp) | `find-definitions-for-emacs` + Snippet-Fallback |
+
+**13 Feature-Commits** (`8539c55..0b3ae38`), 16 Dateien, +543/-15 Zeilen.
+Manuelle Verifikation in Emacs: M-. springt korrekt auf die `defun`-Zeile.
+
+---
+
+## Was lief gut?
+
+### Subagent-Driven Development funktionierte als Orchestrierungs-Disziplin
+8 Tasks, je ein frischer Implementer-Subagent + ein Reviewer-Subagent, am Ende
+ein breiter Final-Review (opus). Der Controller hielt nur Kontext, keine
+Implementierung — eigener Context-Window blieb schlank. Model-Tiering sparte
+Kosten: haiku für mechanische Tasks (complete code im Plan), sonnet für
+Integration, opus nur für den Final-Review.
+
+### Plan-Bug wurde vom Implementer gefangen
+Task 2 hatte eine falsche Test-Erwartung (`f2.SrcLine = 2` statt `3`). Der
+haiku-Implementer rechnete die Zeilen selbst nach, korrigierte den Test und
+dokumentierte es als Concern. Der Task-Reviewer bestätigte die Korrektur. Der
+Plan war falsch, der Prozess hat's abgefangen.
+
+### Pre-existing Race sauber isoliert
+`go test -race ./lib/` schlug in `TestParfuncTimeout` an — DATA RACE in
+`Env.Set`/`Env.Get` (kein Lock auf der Env-Map bei parfunc). Die Untersuchung
+zeigte: schon vor dieser Feature-Reihe vorhanden, nicht durch unsere Commits
+eingeführt. Wurde als out-of-scope dokumentiert, statt den Feature-Review
+damit zu blockieren.
+
+### Spec-Abweichung begründet statt dogmatisch
+Die DefLoc-Map sollte laut Spec in `lib/swank/defs.go` liegen. Bei der
+Plan-Erstellung fiel der Import-Cycle auf (`lib` → `swank` verboten, da
+`swank` bereits `lib` importiert). Map kam nach `lib/defloc.go`. Begründet im
+Plan dokumentiert, Reviewer akzeptierte.
+
+---
+
+## Was lief nicht so gut?
+
+### Unit-Tests erfassten zwei Runtime-Bugs nicht — manueller Emacs-Test schon
+Die 8 Task-Reviews und der opus-Final-Review waren alle grün. Trotzdem sprang
+M-. im manuellen Emacs-Test nicht. Zwei SLIME-Protokoll-Subtilitäten, die kein
+Unit-Test abdeckte:
+
+1. **`(dspec location)`-Wrapper fehlte.** `find-definitions-for-emacs` lieferte
+   nackte `(:location ...)` zurück. SLIME erwartet eine Liste von
+   `(name location)`-Paaren — ohne Label nahm es das falsche Listenelement und
+   zeigte nur die Datei an, statt zu springen.
+2. **`:line N :align` ist nicht kanonisch.** SLIME will `(:line N)`. Das
+   `:align t` wurde ignoriert, Cursor blieb auf Zeile 1. Zusätzlich: relative
+   Load-Pfade (`tmp/test2.lisp`) funktionieren nicht zuverlässig, weil Emacs'
+   `default-directory` ≠ Server-CWD. `filepath.Abs` in `evalLoad` repariert das.
+
+**Lernpunkt:** Unit-Tests prüften nur Substrings (`:location`, `:line`) — die
+matchten auch bei der kaputten Version. Erst der echte SLIME-Client entlarvte
+es. Protokoll-Tests müssen die *Struktur* asserten (hier: dspec-Wrapper +
+`:align`-Abwesenheit), nicht nur Substrings. Nachgeschärft in `d329c84`.
+
+### `git checkout -- file` revertierte versehentlich eigene Fixes
+Beim Aufräumen eines zu breiten `git add -A` lief `git checkout -- lib/...` und
+warf die manuellen Bugfixes weg. Neu angewandt, aber eine Erinnerung:
+`git checkout --` verwirft Working-Tree-Änderungen bedingungslos.
+
+### `pkill -f` traf den eigenen Shell-Prozess
+Beim Server-Neustart killte `pkill -f 'tmp/golisp --swank'` auch die Bash, die
+genau diesen Befehl ausführte (exit 144). Sauberer: gezielt nach PID auf dem
+Port suchen statt `-f`-Pattern-Match.
+
+### `./build`-Script fehlt im Repo
+CLAUDE.md sagt „verwende ./build für die Builds", aber das Script existiert
+weder tracked noch untracked. Pre-existing Quirk; `go build` funktioniert.
+Sollte bereinigt werden (Script anlegen oder CLAUDE.md korrigieren).
+
+---
+
+## Technische Erkenntnisse
+
+### SLIME `find-definitions-for-emacs` will `(dspec location)`-Paare
+Der Return ist `(:ok ((name location) ...))` — eine Liste von 2-Element-Listen,
+je `(label location)`. Nackte Locations funktionieren nicht; SLIME nimmt dann
+das falsche Element und springt nicht. Bei genau einer Location springt SLIME
+direkt, bei mehreren zeigt es eine Auswahlliste.
+
+### `:line`-Position muss kanonisch sein
+`(:location (:file "<abs>") (:line N) nil)` ist die sichere Form. `:align` und
+Varianten sind implementationsabhängig und wurden ignoriert. Der dritte
+Listeneintrag (`nil`) sind Hints — `nil` ist sicher.
+
+### Source-Location auf der `Cell` statt Side-Table
+`SrcFile`/`SrcLine` als Felder auf `Cell` (zero-value = unbekannt) war die
+sauberere Wahl: Reader stempelt direkt beim Bau der Listen-Cell, kein Lookup
+nötig. Alternative wäre eine Side-Map `*Cell → Location` gewesen — mehr
+Indirection, GC-Druck, Pointer-Gleichheit nötig. Felder gewinnen.
+
+### DefLoc-Map in `lib`, nicht `swank`
+`defun` (Package `lib`) ruft `RegisterDefinition`; der SWANK-Primitive ruft
+`LookupDefinition`. Da `swank` bereits `lib` importiert, darf `lib` nicht
+zurück nach `swank` importieren → Map muss in `lib` liegen. Klassische
+Dependency-Richtung: Shared-Code im tieferen Package.
+
+### Subagent-Driven Development: Task-Briefs als Datei-Handoff
+Statt Task-Beschreibungen in den Dispatch-Prompt zu pasten, extrahiert
+`scripts/task-brief` jeden Task in eine Datei. Implementer und Reviewer lesen
+den Brief, schreiben ihren Report in eine Datei zurück. Der Controller-Context
+bleibt schlank — wichtig über 8 Tasks hinweg.
+
+---
+
+## Offene Punkte (nach dieser Session)
+
+- **Env-Locking für parfunc** (pre-existing DATA RACE): `Env.Set`/`Env.Get`
+  arbeiten auf der internen Map ohne Lock. parfunc teilt Env über Goroutinen
+  → Race unter `-race`. Fix: `sync.RWMutex` in `lib/env.go`. Separates Thema.
+- **`./build`-Script** anlegen oder CLAUDE.md-Referenz entfernen.
+- **Weitere SLIME-Methoden**: `find-definitions` für Built-ins (Go-Source),
+  Inspector, Debugger/Restarts, `who-calls`/`who-references`.
+- **Protokoll-Tests strukturell**: Bestehende SWANK-Tests auf
+  Substring-Asserts prüfen und durch Struktur-Asserts ersetzen (wie für
+  `find-definitions` geschehen).
+
+---
+
+## Fazit Session 16
+
+M-. funktioniert — Gerhard kann in SLIME zur Definition springen wie in
+echtem Common Lisp. Der Weg dorthin war die erste vollständige
+Superpowers-Durchlauf-Übung: Brainstorming, Spec, Plan, 8 subagent-gesteuerte
+Tasks, opus-Final-Review, Merge. Der Prozess fing einen Plan-Bug und isolierte
+einen pre-existing Race sauber ab.
+
+Der Wertvollste Fund kam aber erst danach: zwei SLIME-Protokoll-Bugs, die kein
+automatisierter Test sah — nur der echte Emacs-Client. Unit-Tests gegen
+Protokoll-Strings müssen Struktur asserten, nicht Substrings. Das ist die
+nachhaltigere Lektion als das Feature selbst.
+
+> "Ein grüner Review ersetzt nicht den echten Client. Protokolle testet man
+> gegen die Wahrheit, nicht gegen Substrings."
+> — Gerhard & Claude, 24. Juni 2026
