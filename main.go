@@ -91,6 +91,11 @@ func runTests(env *lib.Env) {
 	// block / return-from
 	test(env, `(block outer (return-from outer 42) 0)`)
 	test(env, `(block b (+ 1 (return-from b 99)) 0)`)
+	// Genetischer Algorithmus
+	test(env, `(define ga (ga-create 'bit1 5 4 (lambda (g) (apply + g))))`)
+	test(env, `(ga-init ga)`)
+	test(env, `(ga-calc ga)`)
+	test(env, `(ga-result ga)`)
 }
 
 // runExpression parses and executes a single expression, prints result
