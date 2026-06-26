@@ -55,6 +55,11 @@ GoLisp 是一个用 Go 语言实现的现代 Lisp 解释器，集成了原生 AI
 - **自我扩展能力**：LLM 生成代码，GoLisp 直接执行
 - **集成调用**：并行查询多个 AI 模型
 
+### 遗传算法
+- **内置 GA 原语**：种群创建、初始化、交叉、适应度评估、选择、变异
+- **Lisp 适应度函数**：使用普通 Lisp lambda 定义适应度函数
+- **并行评估**：`ga-calc` 并发评估适应度
+
 ### 数据库支持（PostgreSQL）
 - **原生 PostgreSQL 支持**：通过 `lib/pq` 直接连接数据库
 - **参数化查询**：安全的 `$1`、`$2` 占位符
@@ -264,6 +269,25 @@ results  ; => (42 123 6)
 (fib 20)  ; => 6765
 ```
 
+### 遗传算法
+
+```lisp
+; 进化最大化 1 的数量的位串
+(define ga (ga-create 'bit1 10 20 (lambda (g) (apply + g))))
+(ga-init ga)
+(ga-calc ga)
+(ga-result ga)  ; => 排序后的适应度分数
+
+; 完整生命周期：init → calc → cross → select → mutate
+(define ga2 (ga-create 'bit8 5 8 (lambda (g) (apply + g))))
+(ga-init ga2)
+(ga-calc ga2)
+(ga-cross ga2 2)
+(ga-select ga2 4)
+(ga-mut ga2 0.1)
+(ga-result ga2)
+```
+
 ### PostgreSQL 数据库
 
 ```lisp
@@ -388,6 +412,7 @@ my-project/
 | **文件操作** | `file-write`、`file-append`、`file-read`、`file-exists?`、`file-delete` |
 | **并发** | `chan-make`、`chan-send`、`chan-recv`、`lock-make` |
 | **AI** | `sigo`、`sigo-models`、`sigo-host` |
+| **遗传算法** | `ga-create`、`ga-init`、`ga-cross`、`ga-calc`、`ga-select`、`ga-result`、`ga-mut`、`ga-print`、`ga?` |
 | **PostgreSQL** | `pg-connect`、`pg-query`、`pg-exec`、`pg-close` |
 | **元编程** | `gensym`、`macroexpand`、`error` |
 

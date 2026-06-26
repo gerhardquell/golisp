@@ -55,6 +55,11 @@ GoLisp is a modern Lisp interpreter built in Go, featuring **tail-call optimizat
 - **Self-extending**: LLMs write code, GoLisp executes it
 - **Ensemble calls**: Query multiple AIs in parallel
 
+### Genetic Algorithms
+- **Built-in GA primitives**: Population creation, initialization, crossover, fitness evaluation, selection, mutation
+- **Lisp fitness functions**: Define fitness as ordinary Lisp lambda
+- **Parallel evaluation**: `ga-calc` evaluates fitness concurrently
+
 ### Database (PostgreSQL)
 - **Native PostgreSQL**: Direct database connectivity via `lib/pq`
 - **Parameterized queries**: Safe SQL with `$1`, `$2` placeholders
@@ -279,6 +284,25 @@ results  ; => (42 123 13)
 (fib 20)  ; => 6765
 ```
 
+### Genetic Algorithms
+
+```lisp
+; Evolve bit strings that maximize the number of 1s
+(define ga (ga-create 'bit1 10 20 (lambda (g) (apply + g))))
+(ga-init ga)
+(ga-calc ga)
+(ga-result ga)  ; => sorted fitness scores
+
+; Full lifecycle: init → calc → cross → select → mutate
+(define ga2 (ga-create 'bit8 5 8 (lambda (g) (apply + g))))
+(ga-init ga2)
+(ga-calc ga2)
+(ga-cross ga2 2)
+(ga-select ga2 4)
+(ga-mut ga2 0.1)
+(ga-result ga2)
+```
+
 ### PostgreSQL Database
 
 ```lisp
@@ -403,6 +427,7 @@ my-project/
 | **Files** | `file-write`, `file-append`, `file-read`, `file-exists?`, `file-delete` |
 | **Concurrency** | `chan-make`, `chan-send`, `chan-recv`, `lock-make` |
 | **AI** | `sigo`, `sigo-models`, `sigo-host` |
+| **Genetic Algorithms** | `ga-create`, `ga-init`, `ga-cross`, `ga-calc`, `ga-select`, `ga-result`, `ga-mut`, `ga-print`, `ga?` |
 | **PostgreSQL** | `pg-connect`, `pg-query`, `pg-exec`, `pg-close` |
 | **Meta** | `gensym`, `macroexpand`, `error` |
 

@@ -246,6 +246,28 @@ export GOLISP_PATH=/opt/golisp:/home/user/mylisp
 Verfügbare Modell-Kürzel: `claude-h` `gemini-p` `gpt41`
 und alle lokalen Ollama-Modelle (z.B. `ollama-gemma3-4b`).
 
+### Genetische Algorithmen
+
+```lisp
+; GA-Handle erzeugen: Typ, Genom-Länge, Populationsgröße, Fitness-Funktion
+(define ga (ga-create 'bit1 10 20 (lambda (g) (apply + g))))
+
+; Lebenszyklus
+(ga-init ga)         ; Population mit Zufallswerten initialisieren
+(ga-calc ga)         ; Fitness berechnen und sortieren (parallel)
+(ga-cross ga 2)      ; Crossover mit Blockgröße 2
+(ga-select ga 4)     ; Die besten 4 behalten
+(ga-mut ga 0.1)      ; 10% Mutationswahrscheinlichkeit
+(ga-result ga)       ; Aktuelle Fitness-Scores als Liste
+(ga-print ga 5)      ; Top 5 auf stdout ausgeben
+(ga? ga)             ; => t  (Handle-Prädikat)
+```
+
+**GenTypen:** `bit1`, `bit2`, `bit4`, `bit8`, `biti` (Integer), `bitf` (Float).
+
+**Hinweis:** `ga-calc` ruft die Fitness-Funktion parallel auf. Sie muss rein
+und thread-sicher sein (keine Mutation geteilter Variablen).
+
 ---
 
 ## REPL
