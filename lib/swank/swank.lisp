@@ -344,7 +344,11 @@
          (or (equal? op 'print)
              (equal? op 'println)
              (equal? op 'swank-print)
-             (equal? op 'swank-println)))))
+             (equal? op 'swank-println)
+             (equal? op 'ga-print)
+             (and (equal? op 'format)
+                  (not (null? (cdr form)))
+                  (equal? (cadr form) t))))))
 
 (defun swank--eval-forms (forms acc)
   (if (null? forms)

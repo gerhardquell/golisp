@@ -13,6 +13,7 @@ import (
 	"math"
 	"math/rand"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -396,12 +397,16 @@ func fnAppend(args []*Cell) (*Cell, error) {
 
 // ---- Ausgabe ----
 
-// fnPrint: (print arg1 arg2 ...) → gibt alle Argumente auf stdout aus,
+// fnPrint: (print arg1 arg2 ...) → gibt alle Argumente aus,
 // ohne Zeilenumbruch. Rückgabewert ist das letzte Argument (Common-Lisp-
 // Semantik), damit der REPL nicht `()` hinter die Ausgabe druckt.
 func fnPrint(args []*Cell) (*Cell, error) {
+	var b strings.Builder
 	for _, a := range args {
-		fmt.Print(a)
+		b.WriteString(a.String())
+	}
+	if err := WriteOutput(b.String()); err != nil {
+		return nil, fmt.Errorf("print: %w", err)
 	}
 	if len(args) == 0 {
 		return MakeNil(), nil
@@ -409,10 +414,15 @@ func fnPrint(args []*Cell) (*Cell, error) {
 	return args[len(args)-1], nil
 }
 
-// fnPrintln: wie print, aber mit abschließendem Zeilenumbruch.
+// fnPrintln: wie print, aber mit abschließendem Zeilenumbruch pro Argument.
 func fnPrintln(args []*Cell) (*Cell, error) {
+	var b strings.Builder
 	for _, a := range args {
-		fmt.Println(a)
+		b.WriteString(a.String())
+		b.WriteString("\n")
+	}
+	if err := WriteOutput(b.String()); err != nil {
+		return nil, fmt.Errorf("println: %w", err)
 	}
 	if len(args) == 0 {
 		return MakeNil(), nil

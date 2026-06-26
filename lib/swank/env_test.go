@@ -74,6 +74,119 @@ func TestSwankPrintReturnValue(t *testing.T) {
   }
 }
 
+func TestSwankOutputOnlyForm(t *testing.T) {
+  env := lib.BaseEnv()
+  if err := lib.LoadStdlib(env); err != nil {
+    t.Fatalf("LoadStdlib failed: %v", err)
+  }
+  RegisterSwankEnv(env, func(c *lib.Cell) error { return nil })
+  if err := LoadSwankLisp(env); err != nil {
+    t.Fatalf("LoadSwankLisp failed: %v", err)
+  }
+
+  cases := []struct {
+    expr     string
+    expected bool
+  }{
+    {"(ga-print g 1)", true},
+    {"(format t \"x\")", true},
+    {"(format nil \"x\")", false},
+    {"(+ 1 2)", false},
+    {"(print 1)", true},
+    {"(println 1)", true},
+  }
+
+  for _, tc := range cases {
+    call := "(swank--output-only-form? (quote " + tc.expr + "))"
+    cell, err := lib.Read(call)
+    if err != nil {
+      t.Fatalf("read %q failed: %v", call, err)
+    }
+    result, err := lib.Eval(cell, env)
+    if err != nil {
+      t.Fatalf("eval %q failed: %v", call, err)
+    }
+    got := result.Type != lib.NIL
+    if got != tc.expected {
+      t.Errorf("%q: expected %v, got %v", tc.expr, tc.expected, got)
+    }
+  }
+}
+
+func TestSwankFormatRedirect(t *testing.T) {
+  env := lib.BaseEnv()
+  if err := lib.LoadStdlib(env); err != nil {
+    t.Fatalf("LoadStdlib failed: %v", err)
+  }
+  var events []string
+  send := func(c *lib.Cell) error {
+    events = append(events, c.String())
+    return nil
+  }
+  RegisterSwankEnv(env, send)
+
+  cell, err := lib.Read("(format t \"hello ~A\" 42)")
+  if err != nil {
+    t.Fatalf("read failed: %v", err)
+  }
+  result, err := lib.Eval(cell, env)
+  if err != nil {
+    t.Fatalf("eval failed: %v", err)
+  }
+  if result == nil || result.Type != lib.NIL {
+    t.Fatalf("expected nil return, got %v", result)
+  }
+  if len(events) != 1 {
+    t.Fatalf("expected 1 event, got %d: %v", len(events), events)
+  }
+  if events[0] != `(:write-string "hello 42")` {
+    t.Fatalf("unexpected event: %s", events[0])
+  }
+}
+
+func TestSwankGaPrintRedirect(t *testing.T) {
+  env := lib.BaseEnv()
+  if err := lib.LoadStdlib(env); err != nil {
+    t.Fatalf("LoadStdlib failed: %v", err)
+  }
+  var events []string
+  send := func(c *lib.Cell) error {
+    events = append(events, c.String())
+    return nil
+  }
+  RegisterSwankEnv(env, send)
+
+  setup, err := lib.Read("(define g (ga-create (quote bit8) 3 2 (lambda (x) 1.0)))")
+  if err != nil {
+    t.Fatalf("read setup failed: %v", err)
+  }
+  _, err = lib.Eval(setup, env)
+  if err != nil {
+    t.Fatalf("eval setup failed: %v", err)
+  }
+
+  cell, err := lib.Read("(ga-print g 1)")
+  if err != nil {
+    t.Fatalf("read failed: %v", err)
+  }
+  result, err := lib.Eval(cell, env)
+  if err != nil {
+    t.Fatalf("eval failed: %v", err)
+  }
+  if result == nil || result.Type != lib.ATOM || result.Val != "t" {
+    t.Fatalf("expected t return, got %v", result)
+  }
+  if len(events) != 1 {
+    t.Fatalf("expected 1 event, got %d: %v", len(events), events)
+  }
+  if !strings.Contains(events[0], ":write-string") {
+    t.Fatalf("expected :write-string event, got %s", events[0])
+  }
+  if !strings.Contains(events[0], "idx | score | values") {
+    t.Fatalf("expected ga-print header in event, got %s", events[0])
+  }
+}
+
 func TestSwankFindDefinition(t *testing.T) {
   env := lib.BaseEnv()
   RegisterSwankEnv(env, func(c *lib.Cell) error { return nil })

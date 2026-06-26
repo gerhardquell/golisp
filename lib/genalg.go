@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"os"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -411,7 +411,7 @@ func GaMut(ga *GA, mutf float64) error {
 
 // ########################################
 func GaPrint(ga *GA, lines int) error {
-	// gibt ga-Strings formatiert auf stdout aus
+	// gibt ga-Strings formatiert aus
 	if ga == nil {
 		return errors.New("GaPrint: ga is nil")
 	}
@@ -422,7 +422,8 @@ func GaPrint(ga *GA, lines int) error {
 	if lines > 0 && lines < n {
 		n = lines
 	}
-	fmt.Fprintf(os.Stdout, "idx | score | values\n")
+	var b strings.Builder
+	fmt.Fprintf(&b, "idx | score | values\n")
 	for i := 0; i < n; i++ {
 		score := "-"
 		if i < len(ga.scores) {
@@ -430,27 +431,27 @@ func GaPrint(ga *GA, lines int) error {
 		}
 		switch ga.genType {
 		case BIT1, BIT2, BIT4, BIT8:
-			fmt.Fprintf(os.Stdout, "%3d | %5s |", i, score)
+			fmt.Fprintf(&b, "%3d | %5s |", i, score)
 			for gp := 0; gp < ga.genLen; gp++ {
 				v, _ := getBitValueRaw(ga.bitStore, ga.bytesPer, ga.genType, i, gp)
-				fmt.Fprintf(os.Stdout, " %d", v)
+				fmt.Fprintf(&b, " %d", v)
 			}
-			fmt.Fprintln(os.Stdout)
+			b.WriteString("\n")
 		case BITI:
-			fmt.Fprintf(os.Stdout, "%3d | %5s |", i, score)
+			fmt.Fprintf(&b, "%3d | %5s |", i, score)
 			for gp := 0; gp < ga.genLen; gp++ {
-				fmt.Fprintf(os.Stdout, " %d", ga.intStore[i*ga.genLen+gp])
+				fmt.Fprintf(&b, " %d", ga.intStore[i*ga.genLen+gp])
 			}
-			fmt.Fprintln(os.Stdout)
+			b.WriteString("\n")
 		case BITF:
-			fmt.Fprintf(os.Stdout, "%3d | %5s |", i, score)
+			fmt.Fprintf(&b, "%3d | %5s |", i, score)
 			for gp := 0; gp < ga.genLen; gp++ {
-				fmt.Fprintf(os.Stdout, " %.4f", ga.floatStore[i*ga.genLen+gp])
+				fmt.Fprintf(&b, " %.4f", ga.floatStore[i*ga.genLen+gp])
 			}
-			fmt.Fprintln(os.Stdout)
+			b.WriteString("\n")
 		}
 	}
-	return nil
+	return WriteOutput(b.String())
 }
 
 // ########################################
